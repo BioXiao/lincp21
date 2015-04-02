@@ -1,0 +1,10 @@
+[Thu Mar 26 11:23:09 EDT 2015] net.sf.picard.sam.SortSam INPUT=/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/bam/Lung_KO3/accepted_hits.bam OUTPUT=/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/bam/Lung_KO3/accepted_hits_sorted_picard.bam SORT_ORDER=coordinate    VERBOSITY=INFO QUIET=false VALIDATION_STRINGENCY=STRICT COMPRESSION_LEVEL=5 MAX_RECORDS_IN_RAM=500000 CREATE_INDEX=false CREATE_MD5_FILE=false
+[Thu Mar 26 11:23:09 EDT 2015] Executing as agroff@holy2a11102.rc.fas.harvard.edu on Linux 2.6.32-431.17.1.el6.x86_64 amd64; Java HotSpot(TM) 64-Bit Server VM 1.6.0_11-b03; Picard version: 1.98(1547)
+INFO	2015-03-26 11:28:44	SortSam	Read    10,000,000 records.  Elapsed time: 00:05:26s.  Time for last 10,000,000:  326s.  Last read position: chr11:103,233,063
+INFO	2015-03-26 11:34:05	SortSam	Read    20,000,000 records.  Elapsed time: 00:10:48s.  Time for last 10,000,000:  322s.  Last read position: chr16:87,485,596
+INFO	2015-03-26 11:39:40	SortSam	Read    30,000,000 records.  Elapsed time: 00:16:22s.  Time for last 10,000,000:  333s.  Last read position: chr3:20,137,044
+INFO	2015-03-26 11:45:34	SortSam	Read    40,000,000 records.  Elapsed time: 00:22:19s.  Time for last 10,000,000:  357s.  Last read position: chr6:83,520,793
+INFO	2015-03-26 11:50:06	SortSam	Read    50,000,000 records.  Elapsed time: 00:26:50s.  Time for last 10,000,000:  270s.  Last read position: chr9:78,479,483
+INFO	2015-03-26 11:52:24	SortSam	Finished reading inputs, merging and writing to output now.
+[Thu Mar 26 12:23:04 EDT 2015] net.sf.picard.sam.SortSam done. Elapsed time: 59.91 minutes.
+Runtime.totalMemory()=9317974016

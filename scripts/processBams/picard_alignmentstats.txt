@@ -1,0 +1,8 @@
+module load bio/picard-tools-1.98
+#module load hpc/picard-tools-1.44
+#java -vmargs -Xms4g -Xmx40g -jar /n/sw/picard-tools-1.98/CollectAlignmentSummaryMetrics.jar INPUT=accepted_hits_sorted.bam OUTPUT=stats.out
+
+mem=2000
+threads=1
+time=20
+sbatch -J "NRAG001" -t $time --mem=$mem -N 1 -n $threads -p general --mail-type=FAIL --wrap="java -Xmx40g -jar /n/sw/picard-tools-1.98/CollectAlignmentSummaryMetrics.jar INPUT=accepted_hits_sorted.bam OUTPUT=stats.out STOP_AFTER=100"

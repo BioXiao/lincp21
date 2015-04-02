@@ -1,0 +1,47 @@
+
+[2015-03-23 13:47:50] Beginning TopHat run (v2.0.6)
+-----------------------------------------------
+[2015-03-23 13:47:50] Checking for Bowtie
+		  Bowtie version:	 2.0.2.0
+[2015-03-23 13:47:51] Checking for Samtools
+		Samtools version:	 0.1.18.0
+[2015-03-23 13:47:51] Checking for Bowtie index files
+[2015-03-23 13:47:51] Checking for reference FASTA file
+[2015-03-23 13:47:51] Generating SAM header for /n/rinn_data1/seq/lgoff/Projects/BrainMap/data/indexes/mm10/mm10_brainmap
+	format:		 fastq
+	quality scale:	 phred33 (default)
+[2015-03-23 13:47:55] Reading known junctions from GTF file
+[2015-03-23 13:48:07] Preparing reads
+	 left reads: min. length=101, max. length=101, 19379746 kept reads (12662 discarded)
+	right reads: min. length=101, max. length=101, 19279536 kept reads (112872 discarded)
+[2015-03-23 14:46:10] Creating transcriptome data files..
+[2015-03-23 15:01:58] Building Bowtie index from mm10_gencode_vM2_with_lncRNAs_and_LacZ.fa
+[2015-03-23 15:17:39] Mapping left_kept_reads to transcriptome mm10_gencode_vM2_with_lncRNAs_and_LacZ with Bowtie2 
+[2015-03-23 15:50:18] Mapping right_kept_reads to transcriptome mm10_gencode_vM2_with_lncRNAs_and_LacZ with Bowtie2 
+[2015-03-23 16:21:50] Resuming TopHat pipeline with unmapped reads
+[2015-03-23 16:21:53] Mapping left_kept_reads.m2g_um to genome mm10_brainmap with Bowtie2 
+[2015-03-23 16:34:31] Mapping left_kept_reads.m2g_um_seg1 to genome mm10_brainmap with Bowtie2 (1/4)
+[2015-03-23 16:36:25] Mapping left_kept_reads.m2g_um_seg2 to genome mm10_brainmap with Bowtie2 (2/4)
+[2015-03-23 16:38:12] Mapping left_kept_reads.m2g_um_seg3 to genome mm10_brainmap with Bowtie2 (3/4)
+[2015-03-23 16:40:06] Mapping left_kept_reads.m2g_um_seg4 to genome mm10_brainmap with Bowtie2 (4/4)
+[2015-03-23 16:42:22] Mapping right_kept_reads.m2g_um to genome mm10_brainmap with Bowtie2 
+[2015-03-23 16:59:44] Mapping right_kept_reads.m2g_um_seg1 to genome mm10_brainmap with Bowtie2 (1/4)
+[2015-03-23 17:02:39] Mapping right_kept_reads.m2g_um_seg2 to genome mm10_brainmap with Bowtie2 (2/4)
+[2015-03-23 17:06:11] Mapping right_kept_reads.m2g_um_seg3 to genome mm10_brainmap with Bowtie2 (3/4)
+[2015-03-23 17:09:07] Mapping right_kept_reads.m2g_um_seg4 to genome mm10_brainmap with Bowtie2 (4/4)
+[2015-03-23 17:11:54] Searching for junctions via segment mapping
+[2015-03-23 17:24:36] Retrieving sequences for splices
+[2015-03-23 17:28:19] Indexing splices
+[2015-03-23 17:30:05] Mapping left_kept_reads.m2g_um_seg1 to genome segment_juncs with Bowtie2 (1/4)
+[2015-03-23 17:31:02] Mapping left_kept_reads.m2g_um_seg2 to genome segment_juncs with Bowtie2 (2/4)
+[2015-03-23 17:32:09] Mapping left_kept_reads.m2g_um_seg3 to genome segment_juncs with Bowtie2 (3/4)
+[2015-03-23 17:33:11] Mapping left_kept_reads.m2g_um_seg4 to genome segment_juncs with Bowtie2 (4/4)
+[2015-03-23 17:34:14] Joining segment hits
+[2015-03-23 17:38:36] Mapping right_kept_reads.m2g_um_seg1 to genome segment_juncs with Bowtie2 (1/4)
+[2015-03-23 17:39:43] Mapping right_kept_reads.m2g_um_seg2 to genome segment_juncs with Bowtie2 (2/4)
+[2015-03-23 17:41:05] Mapping right_kept_reads.m2g_um_seg3 to genome segment_juncs with Bowtie2 (3/4)
+[2015-03-23 17:42:14] Mapping right_kept_reads.m2g_um_seg4 to genome segment_juncs with Bowtie2 (4/4)
+[2015-03-23 17:43:16] Joining segment hits
+[2015-03-23 17:48:05] Reporting output tracks
+-----------------------------------------------
+[2015-03-23 19:35:50] Run complete: 05:47:59 elapsed

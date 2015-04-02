@@ -1,0 +1,3 @@
+open: No such file or directory
+File /n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/bam/Lung_KO1/accepted_hits.bam doesn't appear to be a valid BAM file, trying SAM...
+Error: cannot open alignment file /n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/bam/Lung_KO1/accepted_hits.bam for reading

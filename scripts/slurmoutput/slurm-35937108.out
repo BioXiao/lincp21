@@ -1,0 +1,19 @@
+
+[2015-03-23 11:28:51] Beginning TopHat run (v2.0.6)
+-----------------------------------------------
+[2015-03-23 11:28:51] Checking for Bowtie
+		  Bowtie version:	 2.0.2.0
+[2015-03-23 11:28:51] Checking for Samtools
+		Samtools version:	 0.1.18.0
+[2015-03-23 11:28:52] Checking for Bowtie index files
+[2015-03-23 11:28:52] Checking for reference FASTA file
+[2015-03-23 11:28:52] Generating SAM header for /n/rinn_data1/seq/lgoff/Projects/BrainMap/data/indexes/mm10/mm10_brainmap
+	format:		 fastq
+	quality scale:	 phred33 (default)
+[2015-03-23 11:41:33] Reading known junctions from GTF file
+[2015-03-23 11:42:38] Preparing reads
+	 left reads: min. length=101, max. length=101, 27191066 kept reads (20549 discarded)
+	right reads: min. length=101, max. length=101, 27032739 kept reads (178876 discarded)
+[2015-03-23 13:05:10] Creating transcriptome data files..
+[2015-03-23 13:25:35] Building Bowtie index from mm10_gencode_vM2_with_lncRNAs_and_LacZ.fa
+slurmstepd: error: *** JOB 35937108 CANCELLED AT 2015-03-23T13:26:50 *** on holy2a01103
