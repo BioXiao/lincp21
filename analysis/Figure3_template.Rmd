@@ -1,6 +1,9 @@
 ```{r test, echo=FALSE}
-#dir<-"/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/diff/Trp53cor1/"
-#tissue<-"Leg"
+#dir<-"/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/diff/Trp53cor1_E14.5_Lung_b0329/"
+#dir<-"/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/diff/Trp53cor1_E14.5_Leg_b0329/"
+#dir<-"/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/diff/oldDiffs/Trp53cor1_E14.5_HEART/"
+dir<-"/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/diff/Trp53cor1_E14.5_Liver_b0329/"
+tissue<-"Leg"
 ```
 
 Figure 3 template 
@@ -59,6 +62,16 @@ Number of DE genes (FDR 0.05): `r length(DEids)`
 csFoldChangeHeatmap(DEgenes,"WT",replicates=TRUE,replicate_num=0,cluster="row")
 ```
 
+Universe DE genes foldchange heatmap:
+```{r UNIVERSE_DEgenes_FC_Heatmap, fig.width=7, fig.height=6}
+universe_geneIDs<-read.table("/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/analysis/universe_of_DE_genes.tab",stringsAsFactors=FALSE)
+universe_geneIDs<-universe_geneIDs$x
+DEgenes<-getGenes(cuff,universe_geneIDs)
+csFoldChangeHeatmap(DEgenes,"WT",replicates=TRUE,replicate_num=0,cluster="row")
+```
+
+
+
 ```{r expressedandchanging_setup,results='hide'}
 #alternately, anything expressed and over logfoldchange2
 dat<-diffData(genes(cuff))
@@ -70,25 +83,170 @@ genes<-getGenes(cuff,ids)
 
 Now, look at genes that are detectably expressed (FPKM>0.5, yes I know it should be 1), and log2foldchange>2 in any direction: `r length(ids)` genes
 
-```{r expressed_and_changing, fig.width=7, fig.height=6}
+```{r expressed_and_changing, eval=FALSE, fig.width=7, fig.height=6}
 csFoldChangeHeatmap(genes,"WT",replicates=TRUE,replicate_num=0,cluster="both")
 ```
 
-```{r expressedandchanging_sig_setup}
+```{r expressedandchanging_sig_setup, eval=FALSE}
 sig<-dat[which(dat$significant=="yes"),]
 ids<-sig$gene_id
 genes<-getGenes(cuff,ids)
+#Now, those that are expressed changing and called sig: `r length(ids)` genes 
 ```
 
-Now, those that are expressed changing and called sig: `r length(ids)` genes 
 
-```{r expressed_and_changing_andSIG, fig.width=7, fig.height=6}
+
+
+```{r expressed_and_changing_andSIG, eval=FALSE, fig.width=7, fig.height=6}
 csFoldChangeHeatmap(genes,"WT",replicates=TRUE,replicate_num=0,cluster="both")
 ```
 
+
+
+Tracks for Glo1: 
+
+```{r track_vis, fig.height=15, fig.width=10}
+name<-"Glo1"
+name<-"Cdkn1a"
+myGene<-getGene(cuff,name)
+
+library(GenomicFeatures)
+library(Gviz)
+
+real_chromInfo<-read.table("/n/rinn_data1/users/agroff/GITHUB/BrainMap/abbie_annotation/real_chromosomes_mm10_brainmap.chrom.info",header=TRUE)
+genome<-"mm10"
+
+mm10DB<-loadDb("/n/rinn_data1/users/agroff/GITHUB/BrainMap/analysis/mm10gencode_brainmapDB_nolacz.sqlite")
+
+#Helper Functions
+movingAverage <- function(x, n=10, centered=TRUE) {
+  
+  if (centered) {
+    before <- floor  ((n-1)/2)
+    after  <- ceiling((n-1)/2)
+  } else {
+    before <- n-1
+    after  <- 0
+  }
+  
+  # Track the sum and count of number of non-NA items
+  s     <- rep(0, length(x))
+  count <- rep(0, length(x))
+  
+  # Add the centered data
+  new <- x
+  # Add to count list wherever there isn't a
+  count <- count + !is.na(new)
+  # Now replace NA_s with 0_s and add to total
+  new[is.na(new)] <- 0
+  s <- s + new
+  
+  # Add the data from before
+  i <- 1
+  while (i <= before) {
+    # This is the vector with offset values to add
+    new   <- c(rep(NA, i), x[1:(length(x)-i)])
+    
+    count <- count + !is.na(new)
+    new[is.na(new)] <- 0
+    s <- s + new
+    
+    i <- i+1
+  }
+  
+  # Add the data from after
+  i <- 1
+  while (i <= after) {
+    # This is the vector with offset values to add
+    new   <- c(x[(i+1):length(x)], rep(NA, i))
+    
+    count <- count + !is.na(new)
+    new[is.na(new)] <- 0
+    s <- s + new
+    
+    i <- i+1
+  }
+  
+  # return sum divided by count
+  s/count
+}
+
+makeBamTrack<-function(bamFile,bamName,genome=genome,chromosome,color="steelblue",window=20,ylim=c(0,300)){
+  
+track<-DataTrack(range=bamFile,name=bamName,genome=genome,type="h",transformation=function(x){movingAverage(x,window)},col=color,fill.histogram=color,col.histogram=color,chromosome=chromosome, ylim=ylim, lwd=1.5)
+  
+  return(track)
+}
+
+# Constants #########
+annot<-annotation(myGene)
+margin<-1000
+locus<-strsplit(annot$locus,":")
+locus<-unlist(locus)
+chrom<-locus[[1]]
+start_and_end<-strsplit(locus[[2]],"-")
+start_and_end<-unlist(start_and_end)
+from<-as.numeric(start_and_end[[1]])-margin
+to<-as.numeric(start_and_end[[2]])+margin
+
+genetrack<-GeneRegionTrack(mm10DB,rstarts=from,rends=to,chromosome=chrom,showId=TRUE,geneSymbol=TRUE,genome=genome,name="LincRNA Isoforms",fill="steelblue")
+
+reps<-replicates(cuff)
+files<-lapply(reps$file,function(x){strsplit(x, "/")})
+files<-as.data.frame(files)
+samples<-(t(files[11,]))
+rownames(samples)<-NULL
+JRs<-samples
+
+
+bamRoot<-'/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/bam/'
+
+bamFiles<-lapply(JRs,function(x){paste(bamRoot,x,"/accepted_hits.bam",sep="")})
+
+bamNames<-reps$rep_name
+
+specCols<-brewer.pal(3,"Paired")
+colPal<-colorRampPalette(specCols)
+bamColors<-colPal(length(bamFiles))
+
+
+doPlot<-function(genome=genome,name,myChr,from,to,window,bamFiles,bamNames){
+  #Make Tracks
+  axTrack<-GenomeAxisTrack(add53 = TRUE,add35 = TRUE, labelPos = "above")
+  idxTrack <- IdeogramTrack(genome = genome, chromosome = myChr)
+  #BamTracks
+  write("\tBamTracks",stderr())
+  bamTracks<-list()
+  bamOrder<-c(1:length(bamFiles))
+
+  for (i in bamOrder){
+    track<-makeBamTrack(bamFiles[[i]],bamNames[[i]],genome=genome,chromosome=myChr,color=bamColors[i],window=window)
+    bamTracks<-c(bamTracks,track)
+  }
+  
+  #Plot Tracks
+  write("\tplotting...",stderr())
+  # myTracks<-c(bamTracks,knownGenes)
+  myTracks<-c(idxTrack,axTrack,genetrack,bamTracks)
+  trackSizes<-c(1,1,4,rep(1,length(bamTracks)))
+
+  plotTracks(myTracks,from=from,to=to,chromosome=myChr,showAxis=FALSE,background.title="black",col.title="white",col.axis="black",sizes=trackSizes,geneSymbol=TRUE)
+}
+
+pdf("Cdkn1a_liver_tracks.pdf")
+
+doPlot(genome=genome, name=name, myChr=chrom, from=from, to=to, window=20,bamFiles=bamFiles, bamNames=bamNames)
+dev.off()
+detach("package:GenomicFeatures")
+
+```
+
+
+
+
 GO terms associated with sigDE genes: 
 
-```{r DEgenes_GO, fig.width=7, fig.height=6}
+```{r DEgenes_GO, fig.width=7, fig.height=6, eval=FALSE}
 library(ReactomePA)
 library(DOSE)
 geneAnnot<-annotation(DEgenes)
@@ -220,10 +378,11 @@ enrichmentBreaks<-seq(0,6,length.out=(k+1))
 x<-(-log10(t(all_pval_corrected[,which(colMins(all_pval_corrected) < 0.0001)])))
 x_ordered<-x[order(x[,1], decreasing=TRUE),]
 gseaEnriched<-length(x_ordered)
+#There are `r gseaEnriched` categories enriched (p<0.0001). They are: 
 
 ```
 
-There are `r gseaEnriched` categories enriched (p<0.0001). They are: 
+
 
 ```{r gsea_enrich_fig, fig.width=8, fig.height=16, eval=FALSE}
 if(length(x_ordered)>500){x_ordered<-x_ordered[1:500,]}

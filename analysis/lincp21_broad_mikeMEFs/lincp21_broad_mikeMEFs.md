@@ -143,7 +143,7 @@ Expression heatmap:
 There are 1279 significantly differentially expressed genes. They are:
 
 <!-- html table generated in R 3.0.2 by xtable 1.7-3 package -->
-<!-- Tue Mar 31 23:50:02 2015 -->
+<!-- Mon Apr 13 18:09:30 2015 -->
 <TABLE border=1>
 <TR> <TH>  </TH> <TH> geneAnnot$gene_short_name </TH>  </TR>
   <TR> <TD align="right"> 1 </TD> <TD> H19 </TD> </TR>
@@ -1559,6 +1559,18 @@ Jacks zscore
 ![plot of chunk jacks_zscore](figure/jacks_zscore-1.png) 
 
 
+Consistantly changing genes enrichment:
+
+```
+## Error in (function (side, at = NULL, labels = TRUE, tick = TRUE, line = NA, : no locations are finite
+```
+
+![plot of chunk consistant_enrich](figure/consistant_enrich-1.png) 
+
+
+![plot of chunk consistant_zscore](figure/consistant_zscore-1.png) 
+
+
 All enrichment 
 
 
@@ -1596,7 +1608,7 @@ The pvalue for genes significantly regulated in a region this size  is: 0.219
 
 ## Samples used are:
 <!-- html table generated in R 3.0.2 by xtable 1.7-3 package -->
-<!-- Wed Apr  1 01:30:25 2015 -->
+<!-- Mon Apr 13 20:40:23 2015 -->
 <TABLE border=1>
 <TR> <TH>  </TH> <TH> 11 </TH>  </TR>
   <TR> <TD align="right"> 1 </TD> <TD> lincp21_mikeMEFs_WT1 </TD> </TR>
@@ -1609,7 +1621,7 @@ The pvalue for genes significantly regulated in a region this size  is: 0.219
 
 ## Replicates
 <!-- html table generated in R 3.0.2 by xtable 1.7-3 package -->
-<!-- Wed Apr  1 01:30:25 2015 -->
+<!-- Mon Apr 13 20:40:23 2015 -->
 <TABLE border=1>
 <TR> <TH>  </TH> <TH> file </TH> <TH> sample_name </TH> <TH> replicate </TH> <TH> rep_name </TH> <TH> total_mass </TH> <TH> norm_mass </TH> <TH> internal_scale </TH> <TH> external_scale </TH>  </TR>
   <TR> <TD align="right"> 1 </TD> <TD> /n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/quants/lincp21_mikeMEFs_WT1/abundances.cxb </TD> <TD> WT </TD> <TD align="right">   0 </TD> <TD> WT_0 </TD> <TD align="right"> 21725300.00 </TD> <TD align="right"> 24315400.00 </TD> <TD align="right"> 0.89 </TD> <TD align="right"> 1.00 </TD> </TR>
