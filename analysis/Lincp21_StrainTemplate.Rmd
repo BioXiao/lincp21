@@ -1,27 +1,24 @@
 ```{r standalone setup, echo=FALSE}
 #strain<-"Trp53cor1"
 #timepoint<-"Embryonic"
-#filename<-"Leg_WT_v_KO"
-#dir<-"/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/diff/oldDiffs/Trp53cor1"
+#filename<-"MEF_WT_v_KO"
+#dir<-"/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/diff/Trp53cor1_mike_MEFs_b0329/"
+
+dir<-"/n/rinn_data1/seq/lgoff/Projects/BrainMap/data/diffs/Trp53cor1_vs_WT_Adult"
+
+
 ```
 
 `r strain` KO vs WT (`r timepoint`)
 ======================================
 
-```{r init, echo=FALSE}
-# Set knitr opts
-
-#path<-paste(filename,"/figure/",sep="")
+```{r init, echo=FALSE} 
+# Setup + knitr opts
 opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE,fig.height=4, fig.width=4,dev=c('png', 'pdf'))
 alpha<-0.05 
-
 strain<-"Trp53cor1"
-
-#analysisdir<-"/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/diff/"
-#diffdir<-"/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/diff/"
 GTF <- "/n/rinn_data1/seq/lgoff/Projects/BrainMap/data/annotation/mm10_gencode_vM2_with_lncRNAs_and_LacZ.gtf"
 genome<-"mm10"
-
 ```
 
 ```{r vars_and_setup,echo=FALSE,results='hide',message=FALSE}
@@ -45,10 +42,11 @@ kegg_gs<-GSA.read.gmt("/n/rinn_data1/annotations/gsea/msigdb_v4.0_files_to_downl
 #JACKS genesets 
 jacks_gs<-GSA.read.gmt("/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/analysis/Jacks_genesets.gmt")
 
+#always_changing_gs<-GSA.read.gmt("/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/analysis/always_changing_genes_lincp21.gmt")
 #Oncogenic signatures
 oncogene_gs<-GSA.read.gmt("/n/rinn_data1/annotations/gsea/msigdb_v4.0_files_to_download_locally/msigdb_v4.0_GMTs/c6.all.v4.0.symbols.gmt")
 
-all_gs<-GSA.read.gmt("/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/diff/p53_genesets/msigdb.v4.0.symbols.gmt")
+#all_gs<-GSA.read.gmt("/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/diff/p53_genesets/msigdb.v4.0.symbols.gmt")
 
 #setwd(analysisdir)
 deletionCoords<-read.table("/n/rinn_data1/users/agroff/GITHUB/BrainMap/analysis/mm10DeletionCoords.txt",sep="\t",header=TRUE,stringsAsFactors=FALSE)
@@ -63,7 +61,11 @@ files<-lapply(reps$file,function(x){strsplit(x, "/")})
 #field 9 will be JR number 
 files<-as.data.frame(files)
 samples<-(t(files[12,]))
+if(grepl("brain",sample)){
+  samples<-t(files[10,])
+}
 rownames(samples)<-NULL
+
 ```
 
 This file shows the wt-v-ko comparison for `r strain`. 
@@ -294,9 +296,9 @@ track<-DataTrack(range=bamFile,name=bamName,genome=genome,type="h",transformatio
   return(track)
 }
 
-# Constants #########
+### Constants #########
 annot<-annotation(myGene)
-margin<-8000
+margin<-20000
 locus<-strsplit(annot$locus,":")
 locus<-unlist(locus)
 chrom<-locus[[1]]
@@ -307,11 +309,6 @@ to<-as.numeric(start_and_end[[2]])+margin
 
 genetrack<-GeneRegionTrack(mm10DB,rstarts=from,rends=to,chromosome=chrom,showId=TRUE,geneSymbol=TRUE,genome=genome,name="LincRNA Isoforms",fill="steelblue")
 
-reps<-replicates(cuff)
-files<-lapply(reps$file,function(x){strsplit(x, "/")})
-files<-as.data.frame(files)
-samples<-(t(files[11,]))
-rownames(samples)<-NULL
 JRs<-samples
 
 colnames(deletionCoords)<-c("gene_name","gene_region","deletionRegion")
@@ -326,7 +323,14 @@ koStart<-as.numeric(positions[1])
 koWidth<-abs(as.numeric(positions[2])-as.numeric(positions[1]))
 
 
+
+
 bamRoot<-'/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/bam/'
+
+#if tissue is brain:: 
+if(grepl("brain",sample)){
+  bamRoot<-"/n/rinn_data1/seq/lgoff/Projects/BrainMap/data/bam/"
+}
 
 bamFiles<-lapply(JRs,function(x){paste(bamRoot,x,"/accepted_hits.bam",sep="")})
 
@@ -379,7 +383,7 @@ geneDat<-diffData(sigGenes)
 
 num<-length(sig)
 if (length(sig)==0){num=0}
-#
+
 ```
 
 There are `r num` significantly differentially expressed genes. They are:
@@ -406,16 +410,7 @@ Foldchange heatmap of sigGenes
 csFoldChangeHeatmap(sigGenes,"WT",replicates=TRUE,replicate_num=0,cluster="row")
 ```
 
-```{r expressedandchanging_setup,results='hide'}
-#alternately, anything expressed and over logfoldchange2
-dat<-diffData(genes(cuff))
-dat<-dat[which(abs(dat$log2_fold_change)>2),]
-dat<-dat[which(dat$value_1>0.5|dat$value_2>0.5),]
-ids<-dat$gene_id
-genes<-getGenes(cuff,ids)
-```
-
-Now, look at genes that are detectably expressed (FPKM>0.5, yes I know it should be 1), and log2foldchange>2 in any direction: `r length(ids)` genes
+Now, look at genes that are detectably expressed (FPKM>0.5): `r length(ids)` genes
 
 ```{r expressed_and_changing, fig.width=7, fig.height=6}
 csFoldChangeHeatmap(genes,"WT",replicates=TRUE,replicate_num=0,cluster="both")
@@ -425,12 +420,6 @@ csFoldChangeHeatmap(genes,"WT",replicates=TRUE,replicate_num=0,cluster="both")
 sig<-dat[which(dat$significant=="yes"),]
 ids<-sig$gene_id
 genes<-getGenes(cuff,ids)
-```
-
-Now, those that are expressed, changing and called sig: `r length(ids)` genes 
-
-```{r expressed_and_changing_andSIG, fig.width=7, fig.height=6}
-csFoldChangeHeatmap(genes,"WT",replicates=TRUE,replicate_num=0,cluster="both")
 ```
 
 ### Expression-level/significance relationship
@@ -453,50 +442,10 @@ Volcano plot with significant genes only:
 csVolcano(sigGenes, "WT", strain_sample,showSignificant=TRUE,alpha=alpha,xlimits=c(-10,10))+theme_bw()
 ```
 
-### Differential Isoforms between conditions
-
-Per isoform difference between conditions:
-
-```{r diff_iso}
-sigMatrix(cuff, level="isoforms",alpha=alpha)+theme_bw()
-isoformSigIDs<-getSig(cuff,level="isoforms",alpha=alpha)
-if(length(isoformSigIDs)>0){
-  isoformSigGenes<-getGenes(cuff,isoformSigIDs, level="isoforms")
-  isoAnnot<-annotation(isoformSigGenes)
-  }
-```
-
-These isoforms are:
-
-```{r diff_iso_annotations, results='asis'}
-if(length(isoformSigIDs)>0){
-  print(xtable(as.data.frame(isoAnnot$gene_short_name)),type="html")
-  #strainname<-paste(strain,timepoint,sep="_")
-  #out_dir<-"/n/rinn_data1/users/agroff/GITHUB/BrainMap/analysis/DE_lists/iso"
-  #filetowrite<-paste(out_dir,strainname,sep="/")
-  #write.csv(paste(strainname,isoAnnot$gene_short_name,sep=","),filetowrite)
-}else{print("no sig isoforms")}
-```
-
-DE isoform heatmap
-
-```{r isoform_heatmap, fig.height=10, fig.width=10}
-if(length(isoformSigIDs)>0){
-  csHeatmap(isoformSigGenes,cluster='both', replicates=T,labRow=FALSE)+theme_bw()
-  } else{print("no sig isoforms")}
-```
-
-Isoform foldchange heatmap by isoform:
-
-```{r isoform logfoldchange_heatmap, fig.height=8, fig.width=10}
-if(length(isoformSigIDs)>0){
-  csFoldChangeHeatmap(isoforms(isoformSigGenes),"WT",replicates=TRUE,replicate_num=0,clustering="both",labRow=FALSE)+theme_bw()
-}else{print("no sig isoforms")}
-```
 
 # Gene/Pathway Analysis
 
-## GSEA
+##
 
 Enrichment and zscores are calculated based on expression in KO vs WT (fpkmKO/fpkmWT), so genes that are down regulated in KO are shown in blue, while upregulation is shown in red. 
 
@@ -549,11 +498,9 @@ get_gene_set_ztest <- function(scoring_df, gs){
   gene_set_indices <- lapply(gs$genesets, function(genelist){
     gene_set_index(genelist, scoring_df$short_name)
     })
-  
   zscores <- lapply(gene_set_indices,function(gsi){
 					ztest(scoring_df$test_stat[gsi],scoring_df$test_stat)
           })  
-  
 	zscore_mat<-do.call(rbind,lapply(zscores,unlist))
 	rownames(zscore_mat) <- gs$geneset.names
 	colnames(zscore_mat) <- "zscore"
@@ -568,6 +515,15 @@ rownames(df.pop.unique)<-NULL
 df.pop.unique.ordered<-df.pop.unique[order(df.pop.unique$test_stat),]
 Input.df<-df.pop.unique.ordered
 Input.df$short_name<-as.character(Input.df$short_name)
+gseaInput.df<-Input.df
+gseaInput.df$test_stat[which(is.na(gseaInput.df$test_stat))]<-0#Input.df$test_stat[which(is.na(gseaInput.df$test_stat))-1]
+#gsea_file_name<-paste("GSEAinput_",timepoint,".rnk",sep="")
+#write.table(gseaInput.df,file=gsea_file_name,sep="\t",row.names=FALSE, col.names=FALSE,quote=FALSE)
+
+#system(paste("java -cp gsea2-2.2.0.jar -Xmx512m xtools.gsea.GseaPreranked -gmx Jacks_genesets.gmt -collapse false -norm meandiv -nperm 1000 -rnk ",gsea_file_name," -chip gseaftp.broadinstitute.org://pub/gsea/annotations/GENE_SYMBOL.chip -scoring_scheme weighted -rpt_label my_analysis -include_only_symbols true -make_sets true -plot_top_x 20 -rnd_seed timestamp -set_max 500 -set_min 15 -zip_report false -out GSEA_OUT/ -gui false",sep=""))
+
+##system(paste("java -cp gsea2-2.2.0.jar -Xmx512m xtools.gsea.GseaPreranked -gmx Jacks_genesets.gmt -collapse false -mode Max_probe -norm meandiv -nperm 1000 -rnk ",gsea_file_name," -scoring_scheme weighted -rpt_label my_analysis -include_only_symbols true -make_sets true -plot_top_x 20 -rnd_seed timestamp -set_max 500 -set_min 15 -zip_report false -out GSEA_OUT/ -gui false",sep=""))
+
 
 reactome_pvl_mat <- get_gene_set_p_vals(Input.df, reactome_gs,alternative="either")
 reactome_pvl_corrected <- get_gene_set_q_vals(reactome_pvl_mat)
@@ -585,23 +541,34 @@ kegg_pvl_mat <- get_gene_set_p_vals(Input.df, kegg_gs, alternative="either")
 kegg_pvl_corrected <- get_gene_set_q_vals(kegg_pvl_mat)
 kegg_pvl_corrected<-rbind(kegg_pvl_corrected,kegg_pvl_corrected)
 
-ALL_pval_mat<-get_gene_set_p_vals(Input.df,all_gs,alternative="either")
-all_pval_corrected<-get_gene_set_q_vals(ALL_pval_mat)
-all_pval_corrected<-rbind(all_pval_corrected,all_pval_corrected)
+#ALL_pval_mat<-get_gene_set_p_vals(Input.df,all_gs,alternative="either")
+#all_pval_corrected<-get_gene_set_q_vals(ALL_pval_mat)
+#all_pval_corrected<-rbind(all_pval_corrected,all_pval_corrected)
 
 jacks_pval_mat<-get_gene_set_p_vals(Input.df,jacks_gs,alternative="either")
 jacks_pval_corrected<-get_gene_set_q_vals(jacks_pval_mat)
 jacks_pval_corrected<-rbind(jacks_pval_corrected,jacks_pval_corrected)
 
+
+#consistant_change_mat<-get_gene_set_p_vals(Input.df,always_changing_gs#,alternative="either")
+#consistant_corrected<-get_gene_set_q_vals(consistant_change_mat)
+#consistant_corrected<-rbind(consistant_corrected,consistant_corrected)
+
+
 oncogene_pvl_mat<- get_gene_set_p_vals(Input.df, oncogene_gs,alternative="either")
 oncogene_pvl_corrected <- get_gene_set_q_vals(oncogene_pvl_mat)
 oncogene_pvl_corrected<-rbind(oncogene_pvl_corrected,oncogene_pvl_corrected)
 
-all_zscores<-get_gene_set_ztest(Input.df,all_gs)
-all_zscores<-cbind(all_zscores,all_zscores)
+#all_zscores<-get_gene_set_ztest(Input.df,all_gs)
+#all_zscores<-cbind(all_zscores,all_zscores)
 
 jacks_zscores<-get_gene_set_ztest(Input.df,jacks_gs)
 jacks_zscores<-cbind(jacks_zscores,jacks_zscores)
+
+
+#consistant_zscores<-get_gene_set_ztest(Input.df,always_changing_gs)
+#consistant_zscores<-cbind(consistant_zscores,consistant_zscores)
+
 
 reactome_zscores<-get_gene_set_ztest(Input.df,reactome_gs)
 reactome_zscores<-cbind(reactome_zscores,reactome_zscores)
@@ -850,10 +817,34 @@ rm(x_ordered)
 rm(x)
 ```
 
+```{r consistant_enrich, eval=FALSE, fig.width=10,fig.height=12}
+InputCols<-maPalette(low="white",high="red",k=100)
+x<-(-log10(t(consistant_corrected[,which(colMins(consistant_corrected) < 0.001)])))
+x_ordered<-x[order(x[,1], decreasing=TRUE),]
+noinfinities_x<-x_ordered[which(x_ordered !="Inf")]
+x_max<-max(noinfinities_x)+100
+x_ordered[x_ordered=="Inf"]<-x_max
 
-All enrichment 
+if(dim(x_ordered)[1]>1){
+  heatmap.2(x_ordered, trace="none",col=InputCols,breaks=enrichmentBreaks, margins=c(1,20),dendrogram="both",labCol=c(""),cexRow =1, offsetRow=0)
+}else{print("Not enough significant categories to print a heatmap!")}
+rm(x_ordered)
+rm(x)
+```
 
-```{r GSEA_all, fig.width=10, fig.height=16}
+```{r consistant_zscore, eval=FALSE,fig.width=10,fig.heigh=12}
+x<-consistant_zscores[which(colMins(consistant_corrected) < 0.001),]
+x_ordered<-x[order(x[,1], decreasing=TRUE),]
+x_ordered<-as.matrix(x_ordered)
+
+if(dim(x_ordered)[1]>1){
+heatmap.2(x_ordered, trace="none",col=myColors,breaks=myBreaks,margins=c(1,20),dendrogram="both",labCol=c(""),cexRow = 1, offsetRow=0)
+}else{print("Not enough significant categories to print a heatmap!")}
+rm(x_ordered)
+rm(x)
+```
+
+```{r GSEA_all,eval=FALSE, fig.width=10, fig.height=16}
 InputCols<-maPalette(low="white",high="red",k=100)
 x<-(-log10(t(all_pval_corrected[,which(colMins(all_pval_corrected) < 0.0001)])))
 x_ordered<-x[order(x[,1], decreasing=TRUE),]
@@ -862,9 +853,7 @@ if (length(x_ordered)==0){gseaEnriched=0}
 #
 ```
 
-There are `r gseaEnriched` categories enriched (p<0.0001). They are:
-
-```{r gsea_enrich_fig, fig.width=8, fig.height=16}
+```{r gsea_enrich_fig,eval=FALSE, fig.width=8, fig.height=16}
 if(length(x_ordered)>500){x_ordered<-x_ordered[1:500,]}
 noinfinities_x<-x_ordered[which(x_ordered !="Inf")]
 x_max<-max(noinfinities_x)+100
@@ -880,9 +869,7 @@ rm(x_max)
 rm(x)
 ```
 
-ALL zscore:
-
-```{r gsea_zscore_fig, fig.width=8, fig.height=16}
+```{r gsea_zscore_fig,eval=FALSE fig.width=8, fig.height=16}
 #ALL zscore: 
 x<-all_zscores[which(colMins(all_pval_corrected) < 0.0001),]
 x_ordered<-x[order(x[,1], decreasing=TRUE),]
