@@ -3,10 +3,7 @@
 #timepoint<-"Embryonic"
 #filename<-"MEF_WT_v_KO"
 #dir<-"/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/diff/Trp53cor1_mike_MEFs_b0329/"
-
 dir<-"/n/rinn_data1/seq/lgoff/Projects/BrainMap/data/diffs/Trp53cor1_vs_WT_Adult"
-
-
 ```
 
 `r strain` KO vs WT (`r timepoint`)
@@ -58,9 +55,9 @@ cuff<-readCufflinks(dir=dir,gtfFile="/n/rinn_data1/seq/lgoff/Projects/BrainMap/d
 reps<-replicates(cuff)
 files<-lapply(reps$file,function(x){strsplit(x, "/")})
 
-#field 9 will be JR number 
+#field 11 will be JR number 
 files<-as.data.frame(files)
-samples<-(t(files[12,]))
+samples<-(t(files[11,]))
 if(grepl("brain",sample)){
   samples<-t(files[10,])
 }
@@ -322,9 +319,6 @@ positions<-unlist(positions)
 koStart<-as.numeric(positions[1])
 koWidth<-abs(as.numeric(positions[2])-as.numeric(positions[1]))
 
-
-
-
 bamRoot<-'/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/bam/'
 
 #if tissue is brain:: 
@@ -410,7 +404,6 @@ Foldchange heatmap of sigGenes
 csFoldChangeHeatmap(sigGenes,"WT",replicates=TRUE,replicate_num=0,cluster="row")
 ```
 
-Now, look at genes that are detectably expressed (FPKM>0.5): `r length(ids)` genes
 
 ```{r expressed_and_changing, fig.width=7, fig.height=6}
 csFoldChangeHeatmap(genes,"WT",replicates=TRUE,replicate_num=0,cluster="both")
@@ -869,7 +862,7 @@ rm(x_max)
 rm(x)
 ```
 
-```{r gsea_zscore_fig,eval=FALSE fig.width=8, fig.height=16}
+```{r gsea_zscore_fig,eval=FALSE, fig.width=8, fig.height=16}
 #ALL zscore: 
 x<-all_zscores[which(colMins(all_pval_corrected) < 0.0001),]
 x_ordered<-x[order(x[,1], decreasing=TRUE),]
