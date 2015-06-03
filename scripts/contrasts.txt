@@ -1,9 +1,0 @@
-condition_A	condition_B
-wt_leg	ko_leg
-wt_liver	ko_liver
-wt_heart	ko_heart
-wt_brain_adult	ko_brain_adult
-wt_brain_embryo	ko_brain_embryo
-wt_kidney	ko_kidney
-wt_lung	ko_lung
-wt_MEFs	ko_MEFs

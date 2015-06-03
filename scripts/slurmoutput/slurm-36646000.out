@@ -1,8 +1,0 @@
-You are using Cufflinks v2.2.1, which is the most recent release.
-[13:02:56] Loading reference annotation.
-[13:04:02] Inspecting maps and determining fragment length distributions.
-[13:05:24] Modeling fragment count overdispersion.
-[13:11:20] Modeling fragment count overdispersion.
-[13:20:50] Modeling fragment count overdispersion.
-[13:24:33] Modeling fragment count overdispersion.
-slurmstepd: error: *** JOB 36646000 CANCELLED AT 2015-03-31T13:33:23 *** on holy2a02105

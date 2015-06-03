@@ -1,5 +1,0 @@
-[1] "lincp21_broad_mikeMEFs"
-[1] "Trp53cor1"
-slurmstepd: error: *** JOB 36564748 CANCELLED AT 2015-03-30T11:28:57 *** on holy2a01102
-Warning message:
-In dir.create(filename) : 'lincp21_broad_mikeMEFs' already exists
