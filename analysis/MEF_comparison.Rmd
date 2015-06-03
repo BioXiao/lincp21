@@ -1,0 +1,277 @@
+Comparison of MEF RNA-seq to promoter knockout strategy 
+========================================================
+
+```{r options}
+opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE,fig.height=4, fig.width=4,dev=c('png', 'pdf'))
+```
+
+```{r setup}
+dir<-"/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/diff/Trp53cor1_mike_MEFs_b0329/"
+alpha<-0.05 
+strain<-"Trp53cor1"
+GTF <- "/n/rinn_data1/seq/lgoff/Projects/BrainMap/data/annotation/mm10_gencode_vM2_with_lncRNAs_and_LacZ.gtf"
+genome<-"mm10"
+
+library(cummeRbund)
+library(xtable)
+library(limma)
+library(GSA)
+library(gplots)
+library(marray)
+library(ggplot2)
+library(gtable)
+library(gridExtra)
+library(RColorBrewer)
+library(RMySQL)
+jacks_gs<-GSA.read.gmt("/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/analysis/Jacks_genesets.gmt")
+cuff<-readCufflinks(dir=dir,gtfFile="/n/rinn_data1/seq/lgoff/Projects/BrainMap/data/annotation/mm10_gencode_vM2_with_lncRNAs_and_LacZ.gtf",genome="mm10")
+
+```
+
+```{r expression_plots}
+genes<-getGenes(cuff,c("LacZ","Trp53cor1"))
+lacz<-getGene(cuff,"LacZ")
+lincp21<-getGene(cuff,"Trp53cor1")
+#pdf("mef_lacz_expression.pdf")
+expressionBarplot(lacz,replicates=TRUE)+theme_bw()+ylim(0,1.5)
+#dev.off()
+#pdf("mef_lincp21_expression.pdf")
+expressionBarplot(lincp21,replicates=TRUE)+theme_bw()+ylim(0,1.5)
+#dev.off()
+```
+
+```{r DEgenes}
+sig<-getSig(cuff,alpha=0.05)       
+sigGenes<-getGenes(cuff,sig)
+csFoldChangeHeatmap(sigGenes,"WT",replicates=TRUE,replicate_num=0,cluster="row")
+```
+
+```{r GSEA}
+timepoint<-"Mefs"
+
+#GSA/GSEA setup 
+population<-genes(cuff)
+population.diff<-diffData(population)
+annotation<-annotation(genes(cuff))
+gene_names<-merge(annotation,population.diff)
+gene_set_index <- function(genelist, short_names){
+  which(short_names %in% genelist)   
+}
+
+get_gene_set_p_vals <- function(input, gs, alternative){
+  gene_set_indices <- lapply(gs$genesets, function(genelist){
+    gene_set_index(genelist,input$short_name)
+  })
+  pvl<-lapply(gene_set_indices,geneSetTest,input$test_stat, alternative=alternative)
+  pvl_mat<-as.data.frame(t(unlist(pvl)))
+  colnames(pvl_mat) <- gs$geneset.names
+  return(pvl_mat)
+}
+
+get_gene_set_q_vals <- function(pvl_mat, method="bonferroni"){
+  comp_corrected <- matrix(p.adjust(pvl_mat, method=method), nrow=nrow(pvl_mat), ncol=ncol(pvl_mat))
+  colnames(comp_corrected) <- colnames(pvl_mat)
+  rownames(comp_corrected) <- rownames(pvl_mat)
+  return(comp_corrected)
+}
+
+colMins<-function(x){
+  apply(x,2,min)
+}
+rowMins<-function(x){
+  apply(x,1,min)
+}
+
+InputCols<-maPalette(low="white",high="red",k=100)
+
+ztest<-function(samp,pop){
+  (mean(samp,na.rm=T)-mean(pop,na.rm=T))/sd(pop,na.rm=T)
+}
+
+get_gene_set_ztest <- function(scoring_df, gs){  
+  gene_set_indices <- lapply(gs$genesets, function(genelist){
+    gene_set_index(genelist, scoring_df$short_name)
+  })
+  zscores <- lapply(gene_set_indices,function(gsi){
+    ztest(scoring_df$test_stat[gsi],scoring_df$test_stat)
+  })  
+  zscore_mat<-do.call(rbind,lapply(zscores,unlist))
+  rownames(zscore_mat) <- gs$geneset.names
+  colnames(zscore_mat) <- "zscore"
+  return(zscore_mat)
+}
+
+
+df.pop<-data.frame("short_name"=toupper(gene_names$gene_short_name),"test_stat"=gene_names$test_stat)
+df.pop.unique<-unique(df.pop)
+rownames(df.pop.unique)<-NULL
+df.pop.unique.ordered<-df.pop.unique[order(df.pop.unique$test_stat),]
+Input.df<-df.pop.unique.ordered
+Input.df$short_name<-as.character(Input.df$short_name)
+gseaInput.df<-Input.df
+gseaInput.df$test_stat[which(is.na(gseaInput.df$test_stat))]<-0#Input.df$test_stat[which(is.na(gseaInput.df$test_stat))-1]
+gsea_file_name<-"GSEAinput_mikeMEFs.rnk"
+#<-paste("GSEAinput_",timepoint,".rnk",sep="")
+#write.table(gseaInput.df,file=gsea_file_name,sep="\t",row.names=FALSE, col.names=FALSE,quote=FALSE)
+system(paste("java -cp gsea2-2.2.0.jar -Xmx512m xtools.gsea.GseaPreranked -gmx Jacks_genesets.gmt -collapse false -norm meandiv -nperm 1000 -rnk ",gsea_file_name," -chip gseaftp.broadinstitute.org://pub/gsea/annotations/GENE_SYMBOL.chip -scoring_scheme weighted -rpt_label my_analysis -include_only_symbols true -make_sets true -plot_top_x 20 -rnd_seed timestamp -set_max 500 -set_min 15 -zip_report false -out GSEA_OUT/ -gui false",sep=""))
+
+```
+
+```{r GSA}
+jacks_pval_mat<-get_gene_set_p_vals(Input.df,jacks_gs,alternative="either")
+jacks_pval_corrected<-get_gene_set_q_vals(jacks_pval_mat)
+jacks_pval_corrected<-rbind(jacks_pval_corrected,jacks_pval_corrected)
+
+jacks_zscores<-get_gene_set_ztest(Input.df,jacks_gs)
+jacks_zscores<-cbind(jacks_zscores,jacks_zscores)
+
+k <- 100
+myColors<-maPalette(low="blue",mid="white",high="red",k=k)
+myBreaks<-seq(-2,2,length.out=(k+1))
+enrichmentBreaks<-seq(0,6,length.out=(k+1))
+
+
+#Jacks enrichment GSA
+InputCols<-maPalette(low="white",high="red",k=100)
+x<-(-log10(t(jacks_pval_corrected[,which(colMins(jacks_pval_corrected) < 0.001)])))
+x_ordered<-x[order(x[,1], decreasing=TRUE),]
+noinfinities_x<-x_ordered[which(x_ordered !="Inf")]
+x_max<-max(noinfinities_x)+100
+x_ordered[x_ordered=="Inf"]<-x_max
+
+if(dim(x_ordered)[1]>1){
+  heatmap.2(x_ordered, trace="none",col=InputCols,breaks=enrichmentBreaks, margins=c(1,20),dendrogram="both",labCol=c(""),cexRow =1, offsetRow=0)
+}else{print("Not enough significant categories to print a heatmap!")}
+rm(x_ordered)
+rm(x)
+
+
+#Jacks Zscore GSA
+x<-jacks_zscores[which(colMins(jacks_pval_corrected) < 0.001),]
+x_ordered<-x[order(x[,1], decreasing=TRUE),]
+x_ordered<-as.matrix(x_ordered)
+
+if(dim(x_ordered)[1]>1){
+  heatmap.2(x_ordered, trace="none",col=myColors,breaks=myBreaks,margins=c(1,20),dendrogram="both",labCol=c(""),cexRow = 1, offsetRow=0)
+}else{print("Not enough significant categories to print a heatmap!")}
+
+rm(x_ordered)
+rm(x)
+
+```
+
+```{r GSEA_plot}
+
+library(ggplot2)
+library(grid)
+
+pmargin_top <- theme(plot.margin = unit(c(1, 1,-0.5, 0), "lines"))
+pmargin_middle <-theme(plot.margin = unit(c(0, 1,-1, 2.5), "lines"))
+pmargin_bottom <-theme(plot.margin = unit(c(0, 1,0, 0.5), "lines"))
+major_grid <- theme(panel.grid = element_blank(),panel.background = element_blank())
+no_breaks_x <- scale_x_continuous(breaks=NULL)
+no_breaks_y <- scale_y_continuous(breaks=NULL)
+
+makeGSEAplot<-function(genesetData,filename=NULL,title=NULL,zeroCross=c(),...){
+  RankedListMax<-max(abs(genesetData$RANK.METRIC.SCORE))
+  
+  p<-ggplot(genesetData)
+  
+  p1<- p + geom_line(aes(x=RANK.IN.GENE.LIST,y=RUNNING.ES),col="red") + geom_hline(yintercept=0,lty='dashed') + no_breaks_x + major_grid + xlab(NULL) + ylab("Enrichment Score") + pmargin_top + scale_y_continuous(limits=c(-1,1))
+  
+  if(!is.null(title)){
+    p1 <-p1 + ggtitle(title)
+  }
+  
+  p2<- p + geom_linerange(aes(x=RANK.IN.GENE.LIST,ymin=0,ymax=1)) + no_breaks_x + no_breaks_y + major_grid + xlab(NULL) + ylab(NULL) + pmargin_middle
+  
+  p3<- p + stat_density(aes(x=RANK.IN.GENE.LIST,y=1,fill=..density..),geom="tile",position="identity") + xlab(NULL) + ylab(NULL) + scale_fill_gradient(low="white",high="steelblue") + theme(legend.position = "none") + no_breaks_x + no_breaks_y + major_grid + pmargin_middle
+  
+  p4<- p + geom_area(aes(x=RANK.IN.GENE.LIST,y=RANK.METRIC.SCORE),fill='grey') + ylab("Ranked List Metric") + xlab('Rank in Gene List')+ pmargin_bottom + major_grid + scale_y_continuous(limits=c(-RankedListMax,RankedListMax))
+  
+  for (zc in zeroCross){
+    p1<-p1 + geom_vline(xintercept = zc,color="darkgrey",linetype="dashed")
+    p2<-p2 + geom_vline(xintercept = zc,color="darkgrey",linetype="dashed")
+    p3<-p3 + geom_vline(xintercept = zc,color="darkgrey",linetype="dashed")
+    p4<-p4 + geom_vline(xintercept = zc,color="darkgrey",linetype="dashed")
+  }
+  
+  #multiplot(p1, p2, p3, cols=1)
+  if(!is.null(filename)){
+    pdf(filename,...)
+  }
+  #OR
+  grid.newpage()
+  pushViewport(viewport(layout=grid.layout(4,1,heights = unit(c(4, 0.5,0.5, 3),"null"))))
+  print(p1, vp = viewport(layout.pos.row = 1, layout.pos.col = 1))         
+  print(p2, vp = viewport(layout.pos.row = 2, layout.pos.col = 1))
+  print(p3, vp = viewport(layout.pos.row = 3, layout.pos.col = 1))
+  print(p4, vp = viewport(layout.pos.row = 4, layout.pos.col = 1))
+  if(!is.null(filename)){
+    dev.off()
+  }
+  
+}
+
+MEFS_untreated_down<-read.table("GSEA_OUT/my_analysis.GseaPreranked.1432564937341/JACKS_UNTREATED_MEFS_DOWN.xls",header=T,sep="\t",quote="")
+MEFS_untreated_up<-read.table("GSEA_OUT/my_analysis.GseaPreranked.1432564937341/JACKS_UNTREATED_MEFS_UP.xls",header=T,sep="\t",quote="")
+makeGSEAplot(MEFS_untreated_down,filename="MEFS_down_GSEAimage.pdf",title="MEFs Jacks Untreated Down", zeroCross=c(6735)) #WHAT IS ZERO CROSS? 
+makeGSEAplot(MEFS_untreated_up,filename="MEFS_up_GSEAimage.pdf",title="MEFs Jacks Untreated Up", zeroCross=c(6735)) #WHAT IS ZERO CROSS? 
+
+
+```
+
+```{r cisplot}
+library(seqbias)
+library(stringr)
+library(plyr)
+
+strain_name<-"Trp53cor1"
+
+#Constants
+windowSize<-4000000
+
+getTable<-function(object){
+  fullTable<-diffTable(genes(object))
+  write("First Split",stderr())
+  firstSplit<-str_split_fixed(fullTable$locus,":",2)
+  write("Second Split",stderr())
+  secondSplit<-str_split_fixed(firstSplit[,2],"-",2)
+  fullTable$chromosome<-firstSplit[,1]
+  fullTable$start<-as.numeric(secondSplit[,1])
+  fullTable$end<-as.numeric(secondSplit[,2])
+  fullTable
+}
+
+fullTable<-getTable(cuff)
+
+myGene<-fullTable[which(fullTable$gene_short_name==strain),][1,]
+chromosome<-myGene$chromosome
+locuslength=abs(myGene$start-myGene$end)
+start<-myGene$start-(windowSize/2-locuslength/2)
+end<-myGene$end+(windowSize/2-locuslength/2)
+
+#exclude lincRNA in significance calc...
+sigGenesRegion<-fullTable[which(fullTable[,40]==chromosome & fullTable[,39]=="yes" & fullTable[,9]>=start & fullTable[,10]<=end & fullTable[,4]!=strain),]
+
+genesInRegion<-fullTable[which(fullTable[,40]==chromosome & fullTable[,9]>=start & fullTable[,10]<=end),]
+genesInRegion$start<-myGene$start-genesInRegion$start
+colnames(genesInRegion)[39]<-"sig"
+colnames(genesInRegion)[35]<-"log2foldchange"
+colnames(genesInRegion)[36]<-"test_stat"
+data<-ddply(genesInRegion,.(gene_id),head,n=1)
+data$test_stat<-as.numeric(data$test_stat)
+
+data$test_stat<-as.numeric(data[,36])
+data$was_na<-"no"
+if(any(is.na(data$test_stat))){
+  data$was_na[which(is.na(data$test_stat))]<-"yes"
+  data$test_stat[which(is.na(data$test_stat))]<-0
+}
+data$sig<-data[,39]
+  
+currplot<-ggplot(data,aes(start,test_stat,color=sig, label=gene_name,shape=was_na))+geom_point(size=3)+scale_color_manual(values=c("black", "red"))+coord_cartesian(xlim=c(-windowSize/2, windowSize/2),ylim=c(-max(abs(data$test_stat),na.rm=TRUE)-1,max(abs(data$test_stat),na.rm=TRUE)+1))+labs(title=paste(strain_name,timepoint,sep=" "))+geom_text(data=subset(data, sig=='yes'))+theme_bw()+geom_vline(xintercept=0, color="blue")+geom_hline(yintercept=0,color="blue")
+
+currplot
+```
+
