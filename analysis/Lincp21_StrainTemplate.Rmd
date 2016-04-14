@@ -2,8 +2,13 @@
 #strain<-"Trp53cor1"
 #timepoint<-"Embryonic"
 #filename<-"MEF_WT_v_KO"
-#dir<-"/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/diff/Trp53cor1_mike_MEFs_b0329/"
-dir<-"/n/rinn_data1/seq/lgoff/Projects/BrainMap/data/diffs/Trp53cor1_vs_WT_Adult"
+
+#dir<-"/n/rinn_data1/seq/lgoff/Projects/BrainMap/data/diffs/Trp53cor1_vs_WT_Adult"
+#dir<-"/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/diff/oldDiffs/Trp53cor1_E14.5_HEART/"
+#dir<-"/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/diff/Trp53cor1_E14.5_Liver_b0329/"
+dir<-"/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/diff/Trp53cor1_E14.5_Leg_b0331/"
+dir<-"/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/diff/Trp53cor1_mike_MEFs_b0329"
+#dir<-"/Volumes/Odyssey/seq/OtherMice/Diana/lincP21/diff/Trp53cor1_E14.5_Leg_b0331/"
 ```
 
 `r strain` KO vs WT (`r timepoint`)
@@ -52,6 +57,7 @@ colnames(deletionCoords)<-c("gene_name","gene_region","deletionRegion")
 
 ```{r cummeRbund_and_data_setup, echo=FALSE}
 cuff<-readCufflinks(dir=dir,gtfFile="/n/rinn_data1/seq/lgoff/Projects/BrainMap/data/annotation/mm10_gencode_vM2_with_lncRNAs_and_LacZ.gtf",genome="mm10")
+#cuff<-readCufflinks(dir=dir,gtfFile="/Volumes/Odyssey/seq/OtherMice/Diana/lincP21/analysis/mm10_gencode_vM2_with_lncRNAs_and_LacZ.gtf",genome="mm10")
 reps<-replicates(cuff)
 files<-lapply(reps$file,function(x){strsplit(x, "/")})
 
@@ -62,7 +68,6 @@ if(grepl("brain",sample)){
   samples<-t(files[10,])
 }
 rownames(samples)<-NULL
-
 ```
 
 This file shows the wt-v-ko comparison for `r strain`. 
@@ -286,7 +291,7 @@ movingAverage <- function(x, n=10, centered=TRUE) {
   s/count
 }
 
-makeBamTrack<-function(bamFile,bamName,genome=genome,chromosome,color="steelblue",window=20,ylim=c(0,60)){
+makeBamTrack<-function(bamFile,bamName,genome=genome,chromosome,color="steelblue",window=20,ylim=c(0,10)){
   
 track<-DataTrack(range=bamFile,name=bamName,genome=genome,type="h",transformation=function(x){movingAverage(x,window)},col=color,fill.histogram=color,col.histogram=color,chromosome=chromosome, ylim=ylim, lwd=1.5)
   
@@ -295,15 +300,16 @@ track<-DataTrack(range=bamFile,name=bamName,genome=genome,type="h",transformatio
 
 ### Constants #########
 annot<-annotation(myGene)
-margin<-20000
+margin<-5000
 locus<-strsplit(annot$locus,":")
 locus<-unlist(locus)
 chrom<-locus[[1]]
 start_and_end<-strsplit(locus[[2]],"-")
 start_and_end<-unlist(start_and_end)
 from<-as.numeric(start_and_end[[1]])-margin
+#from<-as.numeric(start_and_end[[1]])-5000
 to<-as.numeric(start_and_end[[2]])+margin
-
+#to<-as.numeric(start_and_end[[2]])+28000
 genetrack<-GeneRegionTrack(mm10DB,rstarts=from,rends=to,chromosome=chrom,showId=TRUE,geneSymbol=TRUE,genome=genome,name="LincRNA Isoforms",fill="steelblue")
 
 JRs<-samples
@@ -359,8 +365,9 @@ doPlot<-function(genome=genome,name,myChr,from,to,window,bamFiles,bamNames,koSta
   plotTracks(myTracks,from=from,to=to,chromosome=myChr,showAxis=FALSE,background.title="black",col.title="white",col.axis="black",sizes=trackSizes,geneSymbol=TRUE)
 }
 
+pdf("lincp21_tracks_leg_10scale.pdf")
 doPlot(genome=genome, name=name, myChr=chrom, from=from, to=to, window=20,bamFiles=bamFiles, bamNames=bamNames, koStart=koStart,koWidth=koWidth,koChr=koChr)
-
+dev.off()
 detach("package:GenomicFeatures")
 
 ```
@@ -984,21 +991,48 @@ end<-myGene$end+(windowSize/2-locuslength/2)
 #exclude lincRNA in significance calc...
 sigGenesRegion<-fullTable[which(fullTable[,40]==chromosome & fullTable[,39]=="yes" & fullTable[,9]>=start & fullTable[,10]<=end & fullTable[,4]!=strain),]
 
+numGenesInRegion<-fullTable[which(fullTable[,40]==chromosome & fullTable[,9]>=start & fullTable[,10]<=end),]
+
+
 nSig<-nrow(ddply(sigGenesRegion,.(gene_name),head,n=1))
+nGenes_lncRNA<-nrow(ddply(numGenesInRegion,.(gene_id),head,n=1))
 
 score<-0
 signeighbors<-data.frame(rep(NULL,nIter))
+numGenesRegionList<-list()
 
 for (i in 1:nIter){
-  write(i,stderr())
+  #write(i,stderr())
   sigGenesRegion<-fullTable[which(fullTable[,40]==seqnames(myRandom[i])@values & fullTable[,39]=="yes" & fullTable[,9]>=start(myRandom[i])-(windowSize/2) & fullTable[,10]<=end(myRandom[i])+(windowSize/2)),]
   nSigIter<-nrow(ddply(sigGenesRegion,.(gene_name),head,n=1))
-  write(nSigIter,stderr())
+  
+  numGenesRegion<-fullTable[which(fullTable[,40]==seqnames(myRandom[i])@values & fullTable[,9]>=start(myRandom[i])-(windowSize/2) & fullTable[,10]<=end(myRandom[i])+(windowSize/2)),]
+  nGenes<-nrow(ddply(numGenesRegion,.(gene_id),head,n=1))
+  numGenesRegionList[i]<-nGenes
+  
+  #write(nSigIter,stderr())
   if(nSigIter >= nSig) {score<-score+1}
   signeighbors[1,i]<-nSigIter
 }
 
 pval_for_region<-score/nIter
+
+numGenesinRandomRegions<-unlist(numGenesRegionList)
+hist(numGenesinRandomRegions,100)+abline(v=nGenes_lncRNA)
+#put a pvalue on this calc z score . two-sided pval is is this different. one sided is this greater or less than random 
+#t distribution bc from random samples 
+n<-nIter
+mean<-mean(numGenesinRandomRegions)
+s<-sd(numGenesinRandomRegions)
+t<-(mean-nGenes_lncRNA)/(s/sqrt(n)) #http://www.cyclismo.org/tutorial/R/pValues.html
+paste("t-stat is:",t,sep=" ")
+pval<-2*pt(-abs(t),df=n-1)
+paste(paste("2-sided p value for ",nGenes_lncRNA,sep=""), paste("genes in a 4mb region, is: ",pval,sep=""),sep="")
+
+#chance that this is higher than normal gene cluster number and thus our DE sig region could be overinflated: t.test(numGenes,mu=nGenes_lnc,alternative="less") #asks if true mean of pop is less than my val
+oneSidedttest<-t.test(numGenesinRandomRegions,mu=nGenes_lncRNA,alternative="less")
+paste("one sided t-test for if most windows have fewer genes than this window",oneSidedttest$p.value)
+oneSidedttest
 
 genesInRegion<-fullTable[which(fullTable[,40]==chromosome & fullTable[,9]>=start & fullTable[,10]<=end),]
 genesInRegion$start<-myGene$start-genesInRegion$start
@@ -1017,12 +1051,108 @@ if(any(is.na(data$test_stat))){
 data$sig<-data[,39]
   
 currplot<-ggplot(data,aes(start,test_stat,color=sig, label=gene_name,shape=was_na))+geom_point(size=3)+scale_color_manual(values=c("black", "red"))+coord_cartesian(xlim=c(-windowSize/2, windowSize/2),ylim=c(-max(abs(data$test_stat),na.rm=TRUE)-1,max(abs(data$test_stat),na.rm=TRUE)+1))+labs(title=paste(strain_name,timepoint,sep=" "))+geom_text(data=subset(data, sig=='yes'))+theme_bw()+geom_vline(xintercept=0, color="blue")+geom_hline(yintercept=0,color="blue")
+
+
+#log2foldchange
+
+data$log2foldchange<-as.numeric(data$log2foldchange)
+minInfIndecies<-which(data$log2foldchange=="-Inf")
+maxInfIndecies<-which(data$log2foldchange=="Inf")
+data$log2foldchange<-replace(data$log2foldchange,is.infinite(data$log2foldchange),NA)
+data$log2foldchange<-replace(data$log2foldchange,which(data$Trp53cor1_WT_status=="NOTEST"),NA)
+data$log2foldchange<-replace(data$log2foldchange,which(data$Trp53cor_WT_status=="NOTEST"),NA)
+data$log2foldchange<-replace(data$log2foldchange,minInfIndecies,min(data$log2foldchange,na.rm=TRUE))
+data$log2foldchange<-replace(data$log2foldchange,maxInfIndecies,max(data$log2foldchange,na.rm=TRUE))
+
+pdf("heart_cisplot_logfoldchange.pdf")
+
+ggplot(data,aes(start,log2foldchange,color=sig, label=gene_name))+geom_point(size=3)+scale_color_manual(values=c("black", "red"))+coord_cartesian(xlim=c(-windowSize/2, windowSize/2),ylim=c(-max(abs(data$log2foldchange),na.rm=TRUE)-1,max(abs(data$log2foldchange),na.rm=TRUE)+1))+labs(title=paste(strain_name,timepoint,sep=" "))+geom_text(data=subset(data, sig=='yes'))+theme_bw()+geom_vline(xintercept=0, color="blue")+geom_hline(yintercept=0,color="blue")
+
+dev.off()
 ```
 
 The pvalue for genes significantly regulated in a region this size  is: `r pval_for_region` 
 
 ```{r cisreg_image,  fig.height=8, fig.width=8}
 currplot
+```
+
+
+Binomial test for number of genes DE in region compared to DE genes in whole transcriptome
+
+```{r binomialTestDE}
+binom.test(nSig,26754,length(getSig(cuff))/26754)
+#number DE genes in region, number genes total, degenes_total/numGenestotal
+```
+
+hypergeometric sig genes in region :: (probability of more than nSig num genes DE in this region from this transcriptome)
+
+
+```{r} hypergeoSigGenesRegion}
+nDE_tissue<-length(getSig(cuff))
+hyper_pval<-phyper(nSig,nDE_tissue,26754-nDE_tissue,nGenes_lncRNA,lower.tail=FALSE)
+hyper_pval
+```
+
+# Other clusters of DE genes
+
+```{r otherclustersDEgenescalc,results='hide'}
+
+sigAnnot<-annotation(sigGenes)
+firstSplit<-str_split_fixed(sigAnnot$locus,":",2)
+secondSplit<-str_split_fixed(firstSplit[,2],"-",2)
+sigAnnot$chromosome<-firstSplit[,1]
+sigAnnot$start<-as.numeric(secondSplit[,1])
+sigAnnot$end<-as.numeric(secondSplit[,2])
+sigAnnot<-sigAnnot[order(sigAnnot$locus),]
+
+#find 4Mb regions w nSig or more DE genes and make a dataframe 
+#sum number of entries per chromosome
+splitbyChr<-split(sigAnnot,sigAnnot$chromosome)
+moreGenes<-lapply(seq(1,length(splitbyChr)),function(x)dim(splitbyChr[[x]])[1])
+moreGenes<-unlist(moreGenes)
+chromsToCheck<-splitbyChr[which(moreGenes>=nSig)]
+#if less than nSig, ignore that chromosome 
+
+findWindowsInChrDF<-function(chrDF){
+  #for remaining chr, step through each start and count #DE in 4Mb window 
+    # if >=nSig DE genes between start and start+window
+      # window=coords
+      # else window=no
+    # if start+window>last end, stop and go to next chr 
+  window<-4000000
+  windows<-apply(chrDF,1,function(x){
+    start<-as.numeric(x[9])
+    end<-start+as.numeric(window)
+    num<-length(chrDF[which(chrDF$start>=start & chrDF$start<=end),1])
+    if(num>=nSig){
+      write(paste(chrDF[which(chrDF$start>=start & chrDF$start<=end),4],collapse="_"),stderr())
+      result<-paste(paste(x[8],start,sep=":"),end,sep="-")
+    }else{
+      result<-"no sig window"
+    } 
+    
+    result
+  })
+  chrDF$windows<-windows
+  chrDF  
+  }
+
+sigWindows<-lapply(seq(1,length(chromsToCheck)),function(x)findWindowsInChrDF(chromsToCheck[[x]]))
+
+sigWindows<-do.call(rbind.data.frame,sigWindows)
+#do.call pass elements of your_list as arguments to rbind. 
+#http://stackoverflow.com/questions/4227223/r-list-to-data-frame
+sigWindows<-sigWindows[which(sigWindows$windows!="no sig window"),]
+
+colsToKeep<-c("gene_id","gene_short_name","locus","windows")
+sigWindows<-sigWindows[,colsToKeep]
+row.names(sigWindows)<-NULL
+
+```
+
+```{r otherDEclusterTABLE,results='asis'}
+print(xtable(sigWindows),type="html")
 ```
 
 # Notes

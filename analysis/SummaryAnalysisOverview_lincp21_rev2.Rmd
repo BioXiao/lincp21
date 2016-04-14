@@ -1,0 +1,1074 @@
+Lincp21 Paper Summary Analysis Overview 
+========================================================
+
+This file contains the R code used to generate almost all of the main and supplemental summary figures. Other figure panels came from the individual reports. 
+
+
+```{r options}
+opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE,fig.height=4, fig.width=4,dev=c('png', 'pdf'))
+```
+
+```{r setup}
+library(cummeRbund)
+library(ggplot2)
+library(reshape2)
+alpha<-0.05 
+genome<-"mm10"
+
+cuff<-readCufflinks(dir=all,gtfFile="/n/rinn_data2/users/agroff/Brainmap/annotation/mm10_gencode_vM2_with_lncRNAs_and_LacZ.gtf",genome=genome)
+
+all<-"/n/rinn_data2/users/agroff/seq/OtherMice/Diana/lincP21/diff/BROAD_ALL_3_ALL_TISSUES/"
+all<-"/Volumes/valor2/users/agroff/seq/OtherMice/Diana/lincP21/diff/BROAD_ALL_3_ALL_TISSUES/"
+cuff<-readCufflinks(dir=all,gtfFile="/Volumes/valor2/users/agroff/Brainmap/annotation/mm10_gencode_vM2_with_lncRNAs_and_LacZ.gtf",genome=genome)
+```
+
+```{r functions}
+getRelevantSigTable<-function(cuff,alpha){
+  m<-getSigTable(cuff,alpha)
+  comparisons<-c("wt_brain_adultvsko_brain_adult","wt_brain_embryovsko_brain_embryo","wt_heartvsko_heart","wt_legvsko_leg","wt_livervsko_liver","wt_lungvsko_lung")
+  m<-m[,comparisons]
+  m<-as.data.frame(m)
+  m$sum<-rowSums(m,na.rm=TRUE)
+  m
+}
+
+getLogFoldChangeTable<-function(cuff){
+  fpkms<-fpkmMatrix(genes(cuff))
+  cols<-c("leg","liver","heart","adult_brain","embryo_brain","lung")
+  foldchangeTable<-log2(fpkms[,7:12]/fpkms[,1:6]) #log2foldchange KO/WT
+  colnames(foldchangeTable)<-cols
+  c<-foldchangeTable
+  c<-do.call(data.frame,lapply(c,function(x) replace(x,x=="-Inf",min(is.finite(x))))) #replace -Inf w NA; replace NA w column mins
+  c<-do.call(data.frame,lapply(c,function(x) replace(x,x=="Inf",max(is.finite(x))))) #replace Inf w NA; replace NA with column max 
+  row.names(c)<-row.names(foldchangeTable)
+  c
+}
+
+modifiedHeatmap<-function(cuff,geneSetIDs){
+  fpkms<-fpkmMatrix(genes(cuff))
+  # annot<-annotation(genes(cuff))
+  fpkms<-fpkms[which(row.names(fpkms)%in% geneSetIDs),]
+  cols<-c("leg","liver","heart","adult_brain","embryo_brain","lung")
+  foldchangeTable<-log2(fpkms[,7:12]/fpkms[,1:6]) #log2foldchange KO/WT
+  colnames(foldchangeTable)<-cols
+  # negative = down in KO 
+  # WT leg gene = 4018; KO leg gene = 3914
+  # log2(KO/WT)=-0.0377378549
+  c<-foldchangeTable
+  c<-do.call(data.frame,lapply(c,function(x) replace(x,x=="-Inf",min(is.finite(x))))) #replace -Inf w NA; replace NA w column mins
+  c<-do.call(data.frame,lapply(c,function(x) replace(x,x=="Inf",max(is.finite(x))))) #replace Inf w NA; replace NA with column max 
+  row.names(c)<-row.names(foldchangeTable)
+  m<-c
+  
+  heatRange=2
+  
+  m_vals <- unlist(as.list(m))[is.finite(unlist(as.list(m)))]
+  m_max <- max(m_vals)
+	m_min <- max(m_vals)
+	range_lim <- max(c(abs(m_max), abs(m_min)))
+	range_lim <- min(c(heatRange, range_lim))
+	m_max <- range_lim
+	m_min <- -range_lim
+	m[m <  m_min] <- m_min
+	m[m >  m_max] <- m_max
+	m[is.na(m)] <- 0
+  
+	method=dist
+	#m=m[hclust(method(m))$order, ] # cluster by row 
+  #m=m[,hclust(method(t(m)))$order] # cluster by column
+  m=m[hclust(method(m))$order ,hclust(method(t(m)))$order]#cluster by both
+	
+	rows=dim(m)[1]
+	cols=dim(m)[2]
+
+  melt.m=cbind(rowInd=rep(1:rows, times=cols), colInd=rep(1:cols, each=rows), melt(m))
+
+	g=ggplot(data=melt.m)
+	
+
+		g2=g+geom_rect(aes(xmin=colInd-1,xmax=colInd,ymin=rowInd-1,ymax=rowInd, fill=value))
+	
+
+		g2=g2+scale_x_continuous(breaks=(1:cols)-0.5, labels=colnames(m))
+
+		g2=g2+scale_y_continuous(breaks=(1:rows)-0.5, labels=rownames(m))
+                               #unique(annot$gene_short_name[annot$gene_id %in% rownames(m)]))
+	
+    g2 <- g2 + theme(axis.ticks = element_blank()) 
+
+	  g2=g2+theme(panel.grid.minor=element_line(colour=NA), panel.grid.major=element_line(colour=NA),panel.background=element_rect(fill=NA, colour=NA))
+	
+	##adjust x-axis labels
+	g2=g2+theme(axis.text.x=element_text(angle=-90, hjust=0))
+
+  
+  heatscale=c(low='steelblue',mid='white',high='tomato')
+  heatMidpoint=0
+  legendTitle <- bquote(paste(log[2], frac("FPKM","WT",sep="")))
+
+
+	if (length(heatscale) == 2){
+	    g2 <- g2 + scale_fill_gradient(low=heatscale[1], high=heatscale[2], name=legendTitle)
+	} else if (length(heatscale) == 3) {
+	    if (is.null(heatMidpoint))
+	    {
+	        heatMidpoint = (max(m) + min(m)) / 2.0
+	        #write(heatMidpoint, stderr())
+	    }
+
+	    g2 <- g2 + scale_fill_gradient2(low=heatscale[1], mid=heatscale[2], high=heatscale[3], midpoint=heatMidpoint, name=legendTitle)
+	}
+  g2
+}
+
+```
+
+```{r figure3-dendrogram}
+#pdf("dendrograms.pdf")
+csDendro(genes(cuff))
+#'dendrogram' with 2 branches and 16 members total, at height  0.3757501 
+#csDendro(genes(cuff),replicates=T)
+#dev.off()
+```
+
+
+```{r cdkn1a_response}
+library(stringr)
+cdkn1aAndlincp21<-getGenes(cuff,c("Cdkn1a","Trp53cor1"))
+responseDat<-diffData(cdkn1aAndlincp21)
+fpkms<-repFpkmMatrix(cdkn1aAndlincp21)
+fpkms$gene<-c("Cdkn1a","Linc-p21")
+otherFpkm<-t(fpkms[,1:59])
+otherFpkm<-as.data.frame(otherFpkm)
+colnames(otherFpkm)<-c("Cdkn1a","Lincp21")
+tissue<-as.data.frame(str_split_fixed(row.names(otherFpkm),"_",4))
+otherFpkm$tissue<-tissue[,2]
+otherFpkm$condition<-tissue[,1]
+tissueLabel<-as.vector(as.character(otherFpkm$tissue))
+tissueLabel[grep("brain",tissueLabel)]<-paste("brain",tissue[grep("brain",tissueLabel),3],sep="_")
+otherFpkm$tissue<-tissueLabel
+wt_only<-otherFpkm[grep("wt",otherFpkm$condition),]
+
+
+## Fig3A
+myColors<-c(brain_embryo="red",brain_adult="black", heart="royal blue",leg="grey",lung="purple",liver="dark green")
+pdf("Fig3A_cdkn1a_lincp21_fpkmscatter.pdf")
+ggplot(wt_only,aes(log2(Lincp21),log2(Cdkn1a)))+geom_point(aes(color=tissue))+theme_bw()+stat_smooth(method="lm",se=FALSE, fullrange=TRUE)+scale_color_manual(values=myColors)
+dev.off()
+fit<-lm(log2(wt_only$Cdkn1a)~log2(wt_only$Lincp21))
+summary(fit)
+
+
+##Fig3B
+responseDat$PercentReduced<-with(responseDat,((1-value_2/value_1)*100))
+responseDat$gene<-"Cdkn1a"
+responseDat$gene[which(responseDat$gene_id=="ENSMUSG00000085912.1")]<-"Lincp21"
+responseDat$tissue<-str_split_fixed(responseDat$sample_1,"_",2)[,2]
+dat<-responseDat[,c(5,7,12:14)]
+library(reshape2)
+dat.cast<-dcast(dat,tissue~gene,value.var="PercentReduced")
+dat.cast.fpkm<-dcast(dat,tissue~gene,value.var="value_1")
+names(dat.cast.fpkm)<-c("tissue","Cdkn1a_WT_Fpkm","Lincp21_WT_Fpkm")
+dat.cast.log2foldchange<-dcast(dat,tissue~gene,value.var="log2_fold_change")
+names(dat.cast.log2foldchange)<-paste(names(dat.cast.log2foldchange),"logfoldchange",sep="_")
+dat.cast$Lincp21<-dat.cast.fpkm$Lincp21_WT_Fpkm
+names(dat.cast)<-c("tissue","Cdkn1a_Percent_Reduced","Lincp21_WT_Fpkm")
+dat.cast$Cdkn1a_logfoldchange<-dat.cast.log2foldchange$Cdkn1a_logfoldchange
+
+library(grid)
+
+fpkmDat<-otherFpkm
+fpkmDat$sample<-paste(fpkmDat$tissue,fpkmDat$condition,sep="_")
+std<-aggregate(fpkmDat,by=list(fpkmDat$sample),sd)
+se <- function(x) sqrt(var(x)/length(x))
+std_error<-aggregate(fpkmDat,by=list(fpkmDat$sample),se)
+wt_dat<-std_error[grep("wt",std_error$Group.1),c(1,3)]
+wt_dat$Group.1<-gsub("_wt","",wt_dat$Group.1)
+lincp21Dat<-merge(dat.cast,wt_dat,by.x="tissue",by.y="Group.1")
+names(lincp21Dat)[5]<-"Lincp21_SE"
+dat.cast<-lincp21Dat
+dat.cast<-dat.cast[order(dat.cast$Lincp21_WT_Fpkm),]
+dat.cast$tissue <- factor(dat.cast$tissue, levels = dat.cast$tissue[order(dat.cast$Lincp21_WT_Fpkm)])
+
+
+
+#### Errorbars from (1-KOindividualFPKM/WTAvg) and R^2 and p-val 
+# df with tissue, sample, condition, replicate KO FPKM, and tissue-average-wt FPKM for CDKN1a (and can add lincp21 fpkms later as column) 
+errorDat<-otherFpkm
+errorDat$sample<-paste(errorDat$tissue,errorDat$condition,sep="_")
+errorDat$rep<-row.names(errorDat)
+
+wt_only<-errorDat[grep("wt",errorDat$condition),]
+wt_avgs<-aggregate(wt_only,by=list(wt_only$tissue),mean)[,1:2]
+ko_only<-errorDat[grep("ko",errorDat$condition),]
+k<-merge(ko_only,wt_avgs,by.x="tissue",by.y="Group.1")
+names(k)[7]<-"WTCdkn1aAvg"
+errorDat<-k
+errorDat$reduced<-with(errorDat, (1-Cdkn1a.x/WTCdkn1aAvg)*100)
+se <- function(x) sqrt(var(x)/length(x))
+std_error<-aggregate(errorDat,by=list(errorDat$tissue),se)
+std_error<-std_error[,c(1,9)]
+dat.cast<-merge(dat.cast,std_error,by.x="tissue",by.y="Group.1")
+names(dat.cast)[6]<-"reduced_se"
+limits<-aes(ymin=dat.cast$Cdkn1a_Percent_Reduced-dat.cast$reduced_se,ymax=dat.cast$Cdkn1a_Percent_Reduced+dat.cast$reduced_se)
+bars<-ggplot(dat.cast,aes(tissue,Cdkn1a_Percent_Reduced))+geom_bar(stat="identity")+geom_errorbar(limits,width=0.2)+theme_bw()
+dots<-ggplot(dat.cast,aes(tissue,Lincp21_WT_Fpkm))+geom_point(color="red",size=5)+coord_cartesian(ylim=c(0,1))+theme_bw()
+grid.newpage()
+pdf("Cdkn1aPercentReduction.pdf")
+grid.draw(rbind(ggplotGrob(bars), ggplotGrob(dots), size = "last"))
+dev.off()
+
+
+#ADD lincp21 WT average values to dat.cast and calculate from average
+##caluclate R^2 and p-val 
+fit<-lm(dat.cast$Cdkn1a_Percent_Reduced~dat.cast$Lincp21_WT_Fpkm)
+summary(fit)
+```
+
+```{r figure3_lincP21expression}
+lincp21<-getGene(cuff,"Trp53cor1")
+#pdf("lincp21_expression.pdf")
+expressionBarplot(lincp21)+theme_bw()
+#dev.off()
+```
+
+```{r figure3--alwaysSig}
+sM<-getSigTable(cuff)
+sM<-as.data.frame(sM)
+#comparisons<-c("wt_brain_adultvsko_brain_adult","wt_brain_embryovsko_brain_embryo","wt_heartvsko_heart","wt_legvsko_leg","wt_livervsko_liver","wt_lungvsko_lung")
+#sM<-sM[,comparisons]
+sum<-rowSums(sM)
+common<-sM[which(sum==6),]
+commonIDs<-row.names(common)
+
+commonGenes<-getGenes(cuff,commonIDs)
+commonAnnot<-annotation(commonGenes)
+alwaysSigGenes<-commonAnnot$gene_short_name
+alwaysSigIDs<-commonAnnot$gene_id
+# "Cdkn1a" "Glo1"   "Rnps1"  "Gm9825"
+
+#pdf("alwaysSigFCheatmap.pdf")
+modifiedHeatmap(cuff,alwaysSigIDs)
+#dev.off()
+```
+
+```{r s_DE_GO}
+#get aggregate universe of DE
+brain_dir_adult<-"/n/rinn_data1/seq/lgoff/Projects/BrainMap/data/diffs/Trp53cor1_vs_WT_Adult"
+brain_dir_embryo<-"/n/rinn_data1/seq/lgoff/Projects/BrainMap/data/diffs/Trp53cor1_vs_WT_Embryonic/"
+heart_dir<-"/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/diff/oldDiffs/Trp53cor1_E14.5_HEART/"
+leg_dir<-"/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/diff/Trp53cor1_E14.5_Leg_b0331/"
+liver_dir<-"/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/diff/Trp53cor1_E14.5_Liver_b0329/"
+lung_dir<-"/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/diff/Trp53cor1_E14.5_Lung_b0329/"
+
+brain_embryo<-readCufflinks(dir=brain_dir_embryo,gtfFile="/n/rinn_data1/seq/lgoff/Projects/BrainMap/data/annotation/mm10_gencode_vM2_with_lncRNAs_and_LacZ.gtf",genome=genome)
+brain_adult<-readCufflinks(dir=brain_dir_adult,gtfFile="/n/rinn_data1/seq/lgoff/Projects/BrainMap/data/annotation/mm10_gencode_vM2_with_lncRNAs_and_LacZ.gtf",genome=genome)
+heart<-readCufflinks(dir=heart_dir,gtfFile="/n/rinn_data1/seq/lgoff/Projects/BrainMap/data/annotation/mm10_gencode_vM2_with_lncRNAs_and_LacZ.gtf",genome=genome)
+leg<-readCufflinks(dir=leg_dir,gtfFile="/n/rinn_data1/seq/lgoff/Projects/BrainMap/data/annotation/mm10_gencode_vM2_with_lncRNAs_and_LacZ.gtf",genome=genome)
+liver<-readCufflinks(dir=liver_dir,gtfFile="/n/rinn_data1/seq/lgoff/Projects/BrainMap/data/annotation/mm10_gencode_vM2_with_lncRNAs_and_LacZ.gtf",genome=genome)
+lung<-readCufflinks(dir=lung_dir,gtfFile="/n/rinn_data1/seq/lgoff/Projects/BrainMap/data/annotation/mm10_gencode_vM2_with_lncRNAs_and_LacZ.gtf",genome=genome)
+
+
+liverData<-diffTable(genes(liver))
+write.table(liverData,file="Liver.tab")
+heartData<-diffTable(genes(heart))
+write.table(heartData,file="Heart.tab")
+legData<-diffTable(genes(leg))
+write.table(legData,file="Leg.tab")
+lungData<-diffTable(genes(lung))
+write.table(lungData,file="Lung.tab")
+
+BE_sig<-getSig(brain_embryo,alpha)
+BA_sig<-getSig(brain_adult,alpha)
+heartsig<-getSig(heart,alpha)
+legsig<-getSig(leg,alpha)
+liverSig<-getSig(liver,alpha)
+lungSig<-getSig(lung,alpha)
+
+allSigGenes<-c(BA_sig,BE_sig,heartsig,legsig,liverSig,lungSig)
+uniqueSig<-unique(allSigGenes)
+uniqueSigGenes<-getGenes(leg,uniqueSig)
+uniqueSigAnnot<-annotation(uniqueSigGenes)
+#write.table(uniqueSig,file="ensembleIDS_allSigDE_fromIndividuals.tab",quote=TRUE,sep="\t",row.names=FALSE,col.names=FALSE)
+#write.table(uniqueSigAnnot,file="DE_genes_aggregated_annotation.tab",quote=TRUE,sep="\t",row.names=FALSE,col.names=TRUE)
+#write.table(uniqueSigAnnot$gene_short_name,file="shortNames_allSigDE_fromIndividuals.tab",quote=TRUE,sep="\t",row.names=FALSE,col.names=FALSE)
+
+
+#GO DE
+library(ReactomePA)
+library(DOSE)
+geneNames<-uniqueSigAnnot$gene_short_name
+library(clusterProfiler)
+require(biomaRt)
+
+ensembl <- useMart("ENSEMBL_MART_ENSEMBL","mmusculus_gene_ensembl", 
+                   host="www.ensembl.org")
+
+#Get entrezIDs
+getEntrezIDs<-function (geneNames)
+{
+  tmp <- getBM(attributes = c("entrezgene"), filters = "mgi_symbol", values = geneNames, mart = ensembl)
+  tmp
+}
+sigEntrez<-getEntrezIDs(geneNames)
+sigEZ<-strsplit(as.character(sigEntrez), ", ")
+sigEZ<-unlist(sigEZ)
+require(org.Mm.eg.db) #mapping of entrez IDs to genbank
+goBP<-enrichGO(gene=sigEZ, organism="mouse",ont="BP",pvalueCutoff=0.01,readable=T)
+goMF<-enrichGO(gene=sigEZ, organism="mouse",ont="MF",pvalueCutoff=0.01,readable=T)
+goCC<-enrichGO(gene=sigEZ, organism="mouse",ont="CC",pvalueCutoff=0.01,readable=T)
+kegg<-enrichKEGG(gene=sigEZ, organism="mouse",pvalueCutoff=.01, readable=T)
+pathway<-enrichPathway(gene=sigEZ,organism="mouse",pvalueCutoff=0.01, readable=T)
+#pdf("bioproc_DEGO.pdf")
+plot(goBP,showCategory=20) + theme(axis.text.x=element_text(angle=-90,hjust=0)) + ggtitle("Enriched BP")+theme_bw()
+#dev.off()
+plot(goMF,showCategory=20) + theme(axis.text.x=element_text(angle=-90,hjust=0)) + ggtitle("Enriched MF")+theme_bw()
+#pdf("cellcompartment_DEGO.pdf")
+plot(goCC,showCategory=20) + theme(axis.text.x=element_text(angle=-90,hjust=0)) + ggtitle("Enriched CC")+theme_bw()
+#dev.off()
+#pdf("UniverseDEGOKEGG.pdf")
+plot(kegg, showCategory=20) + ggtitle("Kegg Pathways")+theme_bw()
+#dev.off()
+#pdf("universeDEGO_reactome.pdf")
+plot(pathway,showCategory=20) + ggtitle("Reactome pathway enrichment")+theme_bw()
+#dev.off()
+detach("package:biomaRt")
+```
+
+```{r figure3--cdkn1aExpressionTracks}
+name<-"Trp53cor1"
+myGene<-getGene(leg,name)
+library(GenomicFeatures)
+library(Gviz)
+
+real_chromInfo<-read.table("/n/rinn_data1/users/agroff/GITHUB/BrainMap/abbie_annotation/real_chromosomes_mm10_brainmap.chrom.info",header=TRUE)
+genome<-"mm10"
+
+mm10DB<-loadDb("/n/rinn_data1/users/agroff/GITHUB/BrainMap/analysis/mm10gencode_brainmapDB_nolacz.sqlite")
+
+#Helper Functions
+movingAverage <- function(x, n=10, centered=TRUE) {
+  
+  if (centered) {
+    before <- floor  ((n-1)/2)
+    after  <- ceiling((n-1)/2)
+  } else {
+    before <- n-1
+    after  <- 0
+  }
+  
+  # Track the sum and count of number of non-NA items
+  s     <- rep(0, length(x))
+  count <- rep(0, length(x))
+  
+  # Add the centered data
+  new <- x
+  # Add to count list wherever there isn't a
+  count <- count + !is.na(new)
+  # Now replace NA_s with 0_s and add to total
+  new[is.na(new)] <- 0
+  s <- s + new
+  
+  # Add the data from before
+  i <- 1
+  while (i <= before) {
+    # This is the vector with offset values to add
+    new   <- c(rep(NA, i), x[1:(length(x)-i)])
+    
+    count <- count + !is.na(new)
+    new[is.na(new)] <- 0
+    s <- s + new
+    
+    i <- i+1
+  }
+  
+  # Add the data from after
+  i <- 1
+  while (i <= after) {
+    # This is the vector with offset values to add
+    new   <- c(x[(i+1):length(x)], rep(NA, i))
+    
+    count <- count + !is.na(new)
+    new[is.na(new)] <- 0
+    s <- s + new
+    
+    i <- i+1
+  }
+  
+  # return sum divided by count
+  s/count
+}
+
+makeBamTrack<-function(bamFile,bamName,genome=genome,chromosome,color="steelblue",window=20,ylim=c(0,300)){
+  
+track<-DataTrack(range=bamFile,name=bamName,genome=genome,type="h",transformation=function(x){movingAverage(x,window)},col=color,fill.histogram=color,col.histogram=color,chromosome=chromosome, ylim=ylim, lwd=1.5)
+  
+  return(track)
+}
+
+# Constants #########
+annot<-annotation(myGene)
+margin<-1000
+locus<-strsplit(annot$locus,":")
+locus<-unlist(locus)
+chrom<-locus[[1]]
+start_and_end<-strsplit(locus[[2]],"-")
+start_and_end<-unlist(start_and_end)
+from<-as.numeric(start_and_end[[1]])-5000
+to<-as.numeric(start_and_end[[2]])+2800
+
+genetrack<-GeneRegionTrack(mm10DB,rstarts=from,rends=to,chromosome=chrom,showId=TRUE,geneSymbol=TRUE,genome=genome,name="LincRNA Isoforms",fill="steelblue")
+
+reps<-replicates(leg)
+files<-lapply(reps$file,function(x){strsplit(x, "/")})
+files<-as.data.frame(files)
+samples<-(t(files[11,]))
+rownames(samples)<-NULL
+JRs<-samples
+
+
+bamRoot<-'/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/bam/'
+
+bamFiles<-lapply(JRs,function(x){paste(bamRoot,x,"/accepted_hits.bam",sep="")})
+
+bamNames<-reps$rep_name
+
+specCols<-brewer.pal(3,"Paired")
+colPal<-colorRampPalette(specCols)
+bamColors<-colPal(length(bamFiles))
+
+
+doPlot<-function(genome=genome,name,myChr,from,to,window,bamFiles,bamNames){
+  #Make Tracks
+  axTrack<-GenomeAxisTrack(add53 = TRUE,add35 = TRUE, labelPos = "above")
+  idxTrack <- IdeogramTrack(genome = genome, chromosome = myChr)
+  #BamTracks
+  write("\tBamTracks",stderr())
+  bamTracks<-list()
+  bamOrder<-c(1:length(bamFiles))
+
+  for (i in bamOrder){
+    track<-makeBamTrack(bamFiles[[i]],bamNames[[i]],genome=genome,chromosome=myChr,color=bamColors[i],window=window)
+    bamTracks<-c(bamTracks,track)
+  }
+  
+  #Plot Tracks
+  write("\tplotting...",stderr())
+  # myTracks<-c(bamTracks,knownGenes)
+  myTracks<-c(idxTrack,axTrack,genetrack,bamTracks)
+  trackSizes<-c(1,1,4,rep(1,length(bamTracks)))
+
+  plotTracks(myTracks,from=from,to=to,chromosome=myChr,showAxis=FALSE,background.title="black",col.title="white",col.axis="black",sizes=trackSizes,geneSymbol=TRUE)
+}
+
+#pdf("Cdkn1a_leg_tracks.pdf")
+doPlot(genome=genome, name=name, myChr=chrom, from=from, to=to, window=20,bamFiles=bamFiles, bamNames=bamNames)
+#dev.off()
+detach("package:GenomicFeatures")
+```
+
+```{r figure4_cisSummary}
+getLogFoldChangeTable<-function(cuff){
+  fpkms<-fpkmMatrix(genes(cuff))
+  cols<-c("leg","liver","heart","adult_brain","embryo_brain","lung")
+  foldchangeTable<-log2(fpkms[,7:12]/fpkms[,1:6]) #log2foldchange KO/WT
+  colnames(foldchangeTable)<-cols
+  c<-foldchangeTable
+  c<-do.call(data.frame,lapply(c,function(x) replace(x,x=="-Inf",min(is.finite(x))))) #replace -Inf w NA; replace NA w column mins
+  c<-do.call(data.frame,lapply(c,function(x) replace(x,x=="Inf",max(is.finite(x))))) #replace Inf w NA; replace NA with column max 
+  row.names(c)<-row.names(foldchangeTable)
+  c
+}
+
+library(stringr)
+library(plyr)
+
+strain_name<-"Trp53cor1"
+
+#Constants
+windowSize<-4000000
+
+getTable<-function(object){
+  fullTable<-annotation(genes(object))
+  write("First Split",stderr())
+  firstSplit<-str_split_fixed(fullTable$locus,":",2)
+  write("Second Split",stderr())
+  secondSplit<-str_split_fixed(firstSplit[,2],"-",2)
+  fullTable$chromosome<-firstSplit[,1]
+  fullTable$start<-as.numeric(secondSplit[,1])
+  fullTable$end<-as.numeric(secondSplit[,2])
+  fullTable
+}
+
+#locus annotation
+fullTable<-getTable(cuff)
+
+#summary mean/se logfoldchange...
+fc<-getLogFoldChangeTable(cuff)
+fc$gene_id<-row.names(fc)
+fullTable<-merge(fullTable,fc,by.x="gene_id",by.y="gene_id")
+
+#reduce table 
+columnstokeep<-c("gene_id","gene_short_name","chromosome","start","end","leg","liver","heart","adult_brain","embryo_brain","lung")
+fullTable<-fullTable[,columnstokeep]
+fullTable<-ddply(fullTable,.(gene_id),head,n=1)
+
+myGene<-fullTable[which(fullTable$gene_short_name==strain_name),]
+chromosome<-myGene$chromosome
+locuslength=abs(myGene$start-myGene$end)
+start<-myGene$start-(windowSize/2-locuslength/2)
+end<-myGene$end+(windowSize/2-locuslength/2)
+
+genesInRegion<-fullTable[which(fullTable$chromosome==chromosome & fullTable$start>=start & fullTable$end<=end),]
+
+genesInRegion$start<-myGene$start-genesInRegion$start #bc lincp21 - strand 
+
+#Sig--conglomerate from individuals -- use this!
+DE<-read.table("DE_genes_aggregated_annotation.tab",header=TRUE)
+DE$sig<-"yes"
+
+data<-merge(DE,genesInRegion,by.x="gene_id",by.y="gene_id",all.y=TRUE)
+data$sig[which(is.na(data$sig))]<-"NO"
+
+colsToKeep<-c("gene_id","locus","sig","gene_short_name.y","chromosome","start","end","leg","liver","heart","adult_brain","embryo_brain","lung")
+data<-data[,colsToKeep]
+#colnames(data)<-c("locus","sig","gene_id","gene_short_name","seqnames","start","end","strand","chromosome")
+
+variables<-c("gene_id","gene_short_name.y","chromosome","start","end","sig","locus")
+data.melt<-melt(data,id=variables)
+data.melt$value[is.na(data.melt$value)]<-0
+
+#average log2 foldchange... 
+means<-aggregate(data.melt,by=list(data.melt$gene_short_name),mean)
+means<-means[,c("Group.1","value")]
+colnames(means)<-c("name","mean")
+
+#SE
+se <- function(x) sqrt(var(x)/length(x))
+ses<-aggregate(data.melt,by=list(data.melt$gene_short_name),se)
+ses<-ses[,c("Group.1","value")]
+colnames(ses)<-c("name","se")
+
+mean_se<-merge(means,ses,by.x="name",by.y="name")
+d<-merge(data,mean_se,by.x="gene_short_name.y",by.y="name")
+data<-d[,c("gene_id","gene_short_name.y","chromosome","start","end","sig","se","mean")]
+
+limits<-aes(ymin=data$mean-data$se,ymax=data$mean+data$se)
+
+currplot<-ggplot(data,aes(start,mean,color=sig, label=gene_short_name.y))+geom_point(size=3)+scale_color_manual(values=c("black", "red"))+coord_cartesian(xlim=c(-windowSize/2, windowSize/2),ylim=c(-2.5,2.5))+geom_text(data=subset(data, sig=='yes'))+theme_bw()+geom_vline(xintercept=0, color="blue")+geom_hline(yintercept=0,color="blue")+geom_errorbar(limits,width=0.2)
+
+#pdf("cis_region_summary_plot_may18.pdf")
+currplot
+#dev.off()
+```
+
+```{r sum_consistent_genes}
+#which genes always change in the same direction (not sig) ? 
+c<-getLogFoldChangeTable(cuff)
+m<-c
+up<-c
+up[up>0]<-1
+up[up<0]<-NA
+sum<-rowSums(up)
+up<-up[which(sum==6),]
+
+
+down<-c
+down[down<0]<-(-1)
+down[down>0]<-NA
+sum<-rowSums(down)
+down<-down[which(sum==-6),]
+
+downgenes<-getGenes(cuff,row.names(down))
+upgenes<-getGenes(cuff,row.names(up))
+upAnnot<-annotation(upgenes) 
+downAnnot<-annotation(downgenes)
+allAnnot<-rbind(upAnnot,downAnnot)
+chr17<-allAnnot[grep('chr17',allAnnot$locus),]
+consistantGenes<-c(row.names(down),row.names(up))
+
+library(stringr)
+loci<-str_split_fixed(chr17$locus,":",2)
+chr17chr<-loci[,1]
+startandend<-str_split_fixed(loci[,2],"-",2)
+start<-startandend[,1]
+end<-startandend[,2]
+bed<-as.data.frame(cbind(chr17chr,start,end,chr17$gene_short_name))
+colnames(bed)<-c("chr","start","end","name")
+write.table(bed,file="consistentGenesChr17.bed",quote=FALSE,row.names=FALSE,col.names=FALSE)
+
+library(plyr)
+a<-annotation(genes(cuff))
+chr17<-ddply(a[grep("chr17",a$locus),],.(gene_short_name),head,n=1)
+
+#hypergeometric test
+#26754 genes, 1250 chr17 genes. 698 consistently changing genes, 91 on chr17
+#25504 "black" marbles, 1250 "white marbles", 698 draws, 91 white
+
+# probability of observing more than 91 chr17 genes in this set 
+# http://stackoverflow.com/questions/8382806/r-hypergeometric-test-phyper
+h<-phyper(q=91,m=1250,n=25504,k=698,lower.tail=FALSE)
+h 
+
+
+
+library(seqbias)
+library(stringr)
+library(plyr)
+
+getTable<-function(ids){
+  genes<-getGenes(cuff,ids)
+  fullTable<-annotation(genes)
+  write("First Split",stderr())
+  firstSplit<-str_split_fixed(fullTable$locus,":",2)
+  write("Second Split",stderr())
+  secondSplit<-str_split_fixed(firstSplit[,2],"-",2)
+  fullTable$chromosome<-firstSplit[,1]
+  fullTable$start<-as.numeric(secondSplit[,1])
+  fullTable$end<-as.numeric(secondSplit[,2])
+  fullTable<-fullTable[grep("chr17",fullTable$chromosome),]
+  #  fullTable$chromosome<-factor(fullTable$chromosome, levels=names(seqlengths(mm10.granges)))
+  fullTable
+}
+
+dat<-getTable(consistantGenes)
+
+dat$gene_short_name
+dat_bed<-cbind(dat$chromosome,dat$start,dat$end,dat$gene_short_name)
+write.table(dat_bed,file="ConsistentGenesChr17.txt",quote=FALSE,row.names=FALSE,col.names=FALSE)
+
+
+#annotate which were sig in aggregate list 
+DE<-read.table("DE_genes_aggregated_annotation.tab",header=TRUE)
+DE$sig<-"yes"
+#make DE list from confluence sheet analysis ... 
+
+data<-merge(DE,dat,by.x="gene_id",by.y="gene_id",all.y=TRUE)
+data$sig[which(is.na(data$sig))]<-"NO"
+dat<-data
+rm(data)
+m$gene_id<-row.names(m)
+fullTable<-merge(dat,m,by.x="gene_id",by.y="gene_id")
+fullTable$length<-NULL
+fullTable$coverage<-NULL
+fullTable$nearest_ref_id<-NULL
+fullTable$class_code<-NULL
+keep<-c("gene_id","sig","gene_short_name.y","chromosome","start","end","leg","liver","heart","adult_brain","embryo_brain","lung")
+fullTable<-fullTable[,keep]
+
+
+
+# melt only the logfoldchange values 
+# cast molten dataframe, aggregate
+variables<-c("gene_id","gene_short_name.y","sig","chromosome","start","end")
+dat.melt<-melt(fullTable,id=variables)
+
+#pdf("consistantGenes.pdf")
+modifiedHeatmap(cuff,consistantGenes)
+#dev.off()
+```
+
+```{r GO_consistentlychanginggenes}
+doGOanalysis<-function(geneNames,nameOfSet){
+  library(ReactomePA)
+  library(DOSE)
+  library(clusterProfiler)
+  require(biomaRt)
+  ensembl <- useMart("ENSEMBL_MART_ENSEMBL","mmusculus_gene_ensembl", 
+                   host="www.ensembl.org")
+
+#Get entrezIDs
+  getEntrezIDs<-function (geneNames)
+  {
+    tmp <- getBM(attributes = c("entrezgene"), filters = "mgi_symbol", values = geneNames, mart = ensembl)
+    tmp
+  }
+  sigEntrez<-getEntrezIDs(geneNames)
+  sigEZ<-strsplit(as.character(sigEntrez), ", ")
+  sigEZ<-unlist(sigEZ)
+  require(org.Mm.eg.db) #mapping of entrez IDs to genbank
+  goBP<-enrichGO(gene=sigEZ, organism="mouse",ont="BP",pvalueCutoff=0.01,readable=T)
+  goMF<-enrichGO(gene=sigEZ, organism="mouse",ont="MF",pvalueCutoff=0.01,readable=T)
+  goCC<-enrichGO(gene=sigEZ, organism="mouse",ont="CC",pvalueCutoff=0.01,readable=T)
+  kegg<-enrichKEGG(gene=sigEZ, organism="mouse",pvalueCutoff=.01, readable=T)
+  pathway<-enrichPathway(gene=sigEZ,organism="mouse",pvalueCutoff=0.01, readable=T)
+  
+  pdf(paste(nameOfSet,"_GO_BP.pdf",sep=""))
+    print(plot(goBP,showCategory=20) + theme(axis.text.x=element_text(angle=-90,hjust=0)) + ggtitle("Enriched BP")+theme_bw())
+  dev.off()
+  
+  print(plot(goBP,showCategory=20) + theme(axis.text.x=element_text(angle=-90,hjust=0)) + ggtitle("Enriched BP")+theme_bw())
+
+  
+  pdf(paste(nameOfSet,"_GO_MF.pdf",sep=""))
+    print(plot(goMF,showCategory=20) + theme(axis.text.x=element_text(angle=-90,hjust=0)) + ggtitle("Enriched MF")+theme_bw())
+  dev.off()
+  print(plot(goMF,showCategory=20) + theme(axis.text.x=element_text(angle=-90,hjust=0)) + ggtitle("Enriched MF")+theme_bw())
+  
+  
+  pdf(paste(nameOfSet,"_GO_CC.pdf",sep=""))
+   print(plot(goCC,showCategory=20) + theme(axis.text.x=element_text(angle=-90,hjust=0)) + ggtitle("Enriched CC")+theme_bw())
+  dev.off()
+  
+  print(plot(goCC,showCategory=20) + theme(axis.text.x=element_text(angle=-90,hjust=0)) + ggtitle("Enriched CC")+theme_bw())
+  
+  pdf(paste(nameOfSet,"_GO_Kegg.pdf",sep=""))
+    print(plot(kegg, showCategory=20) + ggtitle("Kegg Pathways")+theme_bw())
+  dev.off()
+
+  print(plot(kegg, showCategory=20) + ggtitle("Kegg Pathways")+theme_bw())
+  
+  pdf(paste(nameOfSet,"_GO_reactome.pdf",sep=""))
+    print(plot(pathway,showCategory=20) + ggtitle("Reactome pathway enrichment")+theme_bw())
+  dev.off()
+  
+  print(plot(pathway,showCategory=20) + ggtitle("Reactome pathway enrichment")+theme_bw())
+  
+  detach("package:biomaRt")
+}
+library(plyr)
+#goUP
+doGOanalysis(upAnnot$gene_short_name,"ConsistentlyUpreg")
+chr17UP<-ddply(upAnnot[grep("chr17",upAnnot$locus),],.(gene_short_name),head,n=1)
+
+
+#goDOWN
+doGOanalysis(downAnnot$gene_short_name,"ConsistentlyDownreg")
+chr17Down<-ddply(downAnnot[grep("chr17",downAnnot$locus),],.(gene_short_name),head,n=1)
+
+#goUP17
+doGOanalysis(chr17UP$gene_short_name,"Chr17consistentlyUp")
+
+#godown17 
+doGOanalysis(chr17Down$gene_short_name,"Chr17consistentlyDown")
+```
+
+```{r sum_consistent_Chr17}
+chr17.dat.melt<-dat.melt[which(dat.melt$chromosome=="chr17"),]
+
+#average
+mean.cast<-dcast(chr17.dat.melt,gene_short_name.y~chromosome,fun.aggregate=mean)
+colnames(mean.cast)<-c("name","mean")
+
+#SE
+se <- function(x) sqrt(var(x)/length(x))
+se.cast<-dcast(chr17.dat.melt,gene_short_name.y~chromosome,fun.aggregate=se)
+colnames(se.cast)<-c("name","se")
+mean_se<-merge(se.cast,mean.cast,by.x="name",by.y="name")
+
+dat<-merge(fullTable,mean_se,by.x="gene_short_name.y",by.y="name")
+lincp21<-getGene(cuff,"Trp53cor1")
+lincp21Annot<-annotation(lincp21)
+lincp21_start<-29057473
+centered_dat<-dat
+centered_dat$start<-centered_dat$start-lincp21_start
+limits<-aes(ymin=centered_dat$mean-centered_dat$se,ymax=centered_dat$mean+centered_dat$se)
+
+#pdf("chr17_consistently_reg_genes_summary.pdf")
+ggplot(centered_dat,aes(start,mean,color=sig, label=gene_short_name.y))+theme_bw()+geom_point()+geom_errorbar(limits,width=0.2)+geom_hline(yintercept=0)+geom_vline(xintercept=0)+scale_color_manual(values=c("black", "red"))+geom_text(data=subset(centered_dat, sig=='yes'))
+#dev.off()
+```
+
+
+```{r cisplots_from_summary}
+#cis region panel
+#biocLite("BSgenome.Mmusculus.UCSC.mm10")
+#biocLite("seqbias")
+library(cummeRbund)
+library(BSgenome.Mmusculus.UCSC.mm10)
+library(seqbias)
+library(stringr)
+library(plyr)
+library(ggplot2)
+nIter<-10000
+windowSize<-4000000
+
+getTable<-function(object){
+  fullTable<-diffTable(genes(object))
+  write("First Split",stderr())
+  firstSplit<-str_split_fixed(fullTable$locus,":",2)
+  write("Second Split",stderr())
+  secondSplit<-str_split_fixed(firstSplit[,2],"-",2)
+  fullTable$chromosome<-firstSplit[,1]
+  fullTable$start<-as.numeric(secondSplit[,1])
+  fullTable$end<-as.numeric(secondSplit[,2])
+
+  fullTable<-fullTable[fullTable$chromosome %in% names(seqlengths(mm10.granges)),]
+  fullTable$chromosome<-factor(fullTable$chromosome, levels=names(seqlengths(mm10.granges)))
+  fullTable
+}
+
+#setwd("/Volumes/valor2/users/agroff/seq/OtherMice/Diana/lincP21/analysis/")
+dat<-read.csv("autoanalysisInfo.csv",header=TRUE,stringsAsFactors=FALSE)
+cisplots<-list()
+regions<-list()
+
+myLengths<-seqlengths(Mmusculus)[!grepl("_random",names(seqlengths(Mmusculus)))]
+myLengths<-myLengths[!grepl("Un",names(myLengths))] #ALSO ADDED 3/11/16
+
+mm10.granges<-GRanges(seqnames = names(myLengths), ranges = IRanges(start = 1, end = myLengths),seqlengths=myLengths)
+myRandom<-random.intervals(mm10.granges,n=nIter,ms=windowSize)
+
+#fullTable<-getTable(cuff)
+#save(fullTable,file="fullTable_contrastSheet.Rdata")
+load("fullTable_contrastSheet.Rdata")
+shortFullTable<-fullTable[,c("start","end","chromosome","gene_short_name",grep("significant",names(fullTable),value=TRUE))]
+strain<-"Trp53cor1"
+
+for (i in 5:10){ #shortFulltable sigs start at 5..10
+  print(i)
+  myGene<-fullTable[which(fullTable$gene_short_name==strain),][1,] #any problems w this?
+  chromosome<-myGene$chromosome
+  length<-abs(myGene$end-myGene$start)
+  start<-myGene$start-((windowSize/2)-length/2)
+  end<-myGene$end+((windowSize/2)-length/2)
+
+  #exclude lincRNA in significance calc...
+  #CHANGE HERE FOR CONTRAST SHEET CALC!! 
+  
+  sigGenesRegion<-shortFullTable[which(shortFullTable[,3]==chromosome & shortFullTable[,1]>=start & shortFullTable[,2]<=end & shortFullTable[,4]!=strain & shortFullTable[,i]=="yes"),]
+  nSig<-nrow(ddply(sigGenesRegion,.(gene_short_name),head,n=1))
+
+  score<-0
+  signeighbors<-data.frame(rep(NULL,nIter))
+
+  for (j in 1:nIter){
+    write(j,stderr())
+    sigGenesRegion<-shortFullTable[which(shortFullTable[,3]==seqnames(myRandom[j])@values & shortFullTable[,i]=="yes" & shortFullTable[,1]>=start(myRandom[j])-(windowSize/2) & shortFullTable[,2]<=end(myRandom[j])+(windowSize/2)),]
+    nSigIter<-nrow(ddply(sigGenesRegion,.(gene_short_name),head,n=1))
+    write(nSigIter,stderr())
+    if(nSigIter >= nSig) {score<-score+1}
+      signeighbors[1,j]<-nSigIter
+  }
+
+  pval_for_region<-score/nIter
+  
+  tissue<-str_split_fixed(names(shortFullTable)[i],"_",3)[2]
+  genesInRegion<-fullTable[which(fullTable[,80]==chromosome & fullTable[,9]>=start & fullTable[,10]<=end),]
+  genesInRegion<-genesInRegion[,c("chromosome","start","end","gene_short_name",grep(tissue,names(genesInRegion),value=TRUE))]
+  genesInRegion<-genesInRegion[which(genesInRegion[,5]=="OK"),] #ADDED THIS 3/10/16
+  genesInRegion<-genesInRegion[which(genesInRegion$gene_short_name!="Tug1"),]
+  genesInRegion$start<-myGene$start-genesInRegion$start
+  
+  
+  colnames(genesInRegion)[8]<-"log2foldchange"
+  colnames(genesInRegion)[9]<-"test_stat"
+  data<-ddply(genesInRegion,.(gene_short_name),head,n=1)
+  data$test_stat<-as.numeric(data[,9])
+  data$log2foldchange<-as.numeric(data[,8])
+  data$was_na<-"no"
+  if(any(is.na(data$test_stat))){
+    data$was_na[which(is.na(data$test_stat))]<-"yes"
+    data$test_stat[which(is.na(data$test_stat))]<-0
+  }
+  data$sig<-data[,12]
+  
+  data$log2foldchange<-as.numeric(data$log2foldchange)
+  minInfIndecies<-which(data$log2foldchange=="-Inf")
+  maxInfIndecies<-which(data$log2foldchange=="Inf")
+  data$log2foldchange<-replace(data$log2foldchange,is.infinite(data$log2foldchange),NA)
+  data$log2foldchange<-replace(data$log2foldchange,which(data$Trp53cor1_WT_status=="NOTEST"),NA)
+  data$log2foldchange<-replace(data$log2foldchange,which(data$Trp53cor_WT_status=="NOTEST"),NA)
+  data$log2foldchange<-replace(data$log2foldchange,minInfIndecies,min(data$log2foldchange,na.rm=TRUE))
+  data$log2foldchange<-replace(data$log2foldchange,maxInfIndecies,max(data$log2foldchange,na.rm=TRUE))
+
+
+  currplot<-ggplot(data,aes(start,log2foldchange,color=sig, label=gene_short_name))+geom_point(size=3)+scale_color_manual(values=c("black", "red"))+labs(title=paste(strain,tissue,sep=" "))+geom_text(data=subset(data, sig=='yes'))+theme_bw()+geom_vline(xintercept=0, color="blue")+geom_hline(yintercept=0,color="blue")+coord_cartesian(xlim=c(-windowSize/2, windowSize/2),ylim=c(-max(abs(data$log2foldchange),na.rm=TRUE)-1,max(abs(data$log2foldchange),na.rm=TRUE)+1))
+  
+  currplot<-currplot+annotate("text",x=0,y=max(abs(data$log2foldchange),na.rm=TRUE)+.5,label=paste("pvalue:",pval_for_region,sep=""))
+
+  cisplots[[i]]<-currplot
+  regions[[i]]<-genesInRegion
+  nameofplot<-paste(strain,tissue,sep="_")
+  ggsave(paste(nameofplot,".pdf",sep=""),plot=currplot)
+}
+
+#save(file="cisregionplotlist_exactWindows.Rdata",cisplots)
+#save(file="cisregion_geneRegionslist_exactWindows.Rdata",regions)
+load("cisregionplotlist_exactWindows.Rdata")
+load("cisregion_geneRegionslist_exactWindows.Rdata")
+```
+
+
+```{r gseasetup,results='hide'}
+library(xtable)
+library(limma)
+library(GSA)
+library(gplots)
+library(marray)
+library(ggplot2)
+library(gtable)
+library(gridExtra)
+library(RColorBrewer)
+library(RMySQL)
+
+reactome_gs <- GSA.read.gmt("/n/rinn_data2/users/agroff/GSEA/c2.cp.reactome.v4.0.symbols.gmt")
+biocarta_gs <- GSA.read.gmt("/n/rinn_data2/users/agroff/GSEA/c2.cp.biocarta.v4.0.symbols.gmt")
+kegg_gs<-GSA.read.gmt("/n/rinn_data2/annotations/gsea/msigdb_v4.0_files_to_download_locally/msigdb_v4.0_GMTs/c2.cp.kegg.v4.0.symbols.gmt")
+
+reactome_gs <- GSA.read.gmt("/Volumes/valor2/users/agroff/GSEA/c2.cp.reactome.v4.0.symbols.gmt")
+biocarta_gs <- GSA.read.gmt("/Volumes/valor2/users/agroff/GSEA/c2.cp.biocarta.v4.0.symbols.gmt")
+#kegg_gs<-GSA.read.gmt("/Volumes/valor2/users/agroff/GSEA/)
+
+
+gene_set_index <- function(genelist, short_names){
+  which(short_names %in% genelist)   
+}
+
+get_gene_set_p_vals <- function(input, gs, alternative){
+  gene_set_indices <- lapply(gs$genesets, function(genelist){
+    gene_set_index(genelist,input$short_name)
+    })
+  pvl<-lapply(gene_set_indices,geneSetTest,input$test_stat, alternative=alternative)
+  pvl_mat<-as.data.frame(t(unlist(pvl)))
+  colnames(pvl_mat) <- gs$geneset.names
+   return(pvl_mat)
+}
+ 
+get_gene_set_q_vals <- function(pvl_mat, method="bonferroni"){
+  comp_corrected <- matrix(p.adjust(pvl_mat, method=method), nrow=nrow(pvl_mat), ncol=ncol(pvl_mat))
+  colnames(comp_corrected) <- colnames(pvl_mat)
+  rownames(comp_corrected) <- rownames(pvl_mat)
+  return(comp_corrected)
+}
+
+colMins<-function(x){
+  apply(x,2,min)
+}
+rowMins<-function(x){
+  apply(x,1,min)
+}
+ 
+InputCols<-maPalette(low="white",high="red",k=100)
+
+
+ztest<-function(samp,pop){
+  (mean(samp,na.rm=T)-mean(pop,na.rm=T))/sd(pop,na.rm=T)
+}
+
+
+get_gene_set_ztest <- function(scoring_df, gs){  
+  gene_set_indices <- lapply(gs$genesets, function(genelist){
+    gene_set_index(genelist, scoring_df$short_name)
+    })
+  
+#  zscores <- apply(scoring_df$,2, function(mat_col){
+#  		lapply(gene_set_indices,function(gsi){
+#					ztest(mat_col[gsi],mat_col)})
+##     })
+  
+  zscores <- lapply(gene_set_indices,function(gsi){
+					ztest(scoring_df$test_stat[gsi],scoring_df$test_stat)
+          })  
+  
+	zscore_mat<-do.call(rbind,lapply(zscores,unlist))
+	rownames(zscore_mat) <- gs$geneset.names
+	colnames(zscore_mat) <- "zscore"
+	return(zscore_mat)
+}
+```
+
+```{r GSEAsummaryLists}
+population<-genes(cuff)
+population.diff<-diffData(population)
+#subset by sample1/2 into a list of dfs
+p<-split(population.diff,population.diff$sample_1,drop=TRUE)
+annotation<-annotation(genes(cuff))
+
+#> names(p)
+#[1] "wt_brain_adult"  "wt_brain_embryo" "wt_heart"        "wt_leg"         
+#[5] "wt_liver"        "wt_lung"   
+
+doGSEA<-function(diff.pop,annotation,geneset){
+  gene_names<-merge(annotation,diff.pop)
+  df.pop<-data.frame("short_name"=toupper(gene_names$gene_short_name),"test_stat"=gene_names$test_stat)
+  df.pop.unique<-unique(df.pop)
+  rownames(df.pop.unique)<-NULL
+  df.pop.unique.ordered<-df.pop.unique[order(df.pop.unique$test_stat),]
+  Input.df<-df.pop.unique.ordered
+  Input.df$short_name<-as.character(Input.df$short_name)
+
+  pvl_mat <- get_gene_set_p_vals(Input.df,geneset,alternative="either")
+  pvl_corrected <- get_gene_set_q_vals(pvl_mat)
+  pvl_corrected<-rbind(pvl_corrected,pvl_corrected)
+  zscores<-get_gene_set_ztest(Input.df,geneset)
+  zscores<-cbind(zscores,zscores)
+
+  k <- 100
+  myColors<-maPalette(low="blue",mid="white",high="red",k=k)
+  myBreaks<-seq(-2,2,length.out=(k+1))
+  enrichmentBreaks<-seq(0,6,length.out=(k+1))
+
+  ##### enrichment
+  InputCols<-maPalette(low="white",high="red",k=100)
+  
+  x<-((zscores[which(colMins(pvl_corrected) < 0.01),]))
+  x_ordered<-x[order(x[,1], decreasing=TRUE),]
+  if(dim(x_ordered)[1]>50){x_ordered<-x_ordered[1:50,]}
+  x_ordered<-as.matrix(x_ordered)
+
+  if(dim(x_ordered)[1]>1){
+    
+  heatmap.2(x_ordered, trace="none",col=myColors,breaks=myBreaks,margins=c(1,20),dendrogram="both",labCol=c(""),cexRow =1, offsetRow=0)
+  
+  }else{print("Not enough significant categories to print a heatmap!")}
+
+  rm(x)
+  rm(x_ordered)
+
+}
+
+```
+
+```{r GSEAoverview}
+getZscores<-function(diff.pop,annotation,geneset){
+  gene_names<-merge(annotation,diff.pop)
+  df.pop<-data.frame("short_name"=toupper(gene_names$gene_short_name),"test_stat"=gene_names$test_stat)
+  df.pop.unique<-unique(df.pop)
+  rownames(df.pop.unique)<-NULL
+  df.pop.unique.ordered<-df.pop.unique[order(df.pop.unique$test_stat),]
+  Input.df<-df.pop.unique.ordered
+  Input.df$short_name<-as.character(Input.df$short_name)
+  pvl_mat <- get_gene_set_p_vals(Input.df,geneset,alternative="either")
+  pvl_corrected <- get_gene_set_q_vals(pvl_mat)
+  pvl_corrected<-rbind(pvl_corrected,pvl_corrected)
+  zscores<-as.data.frame(get_gene_set_ztest(Input.df,geneset))  
+  #x<-((zscores[which(colMins(pvl_corrected) < 0.01),]))
+  zscores$geneset<-row.names(zscores)
+  zscores$zscore[which(colMins(pvl_corrected) > 0.01)]<-0
+  return(zscores)
+}
+
+gseaOverviewPlot<-function(diff.popList,annotation,geneSetName){
+  geneset<-get(geneSetName)
+  genesetScores<-lapply(diff.popList,function(x)getZscores(x,annotation,geneset))
+  zscoremat<-do.call("cbind",genesetScores)
+  zscoremat<-zscoremat[,grep("geneset",names(zscoremat),invert=TRUE)]
+  names(zscoremat)<-names(genesetScores)
+  zscoremat_mat<-as.matrix(zscoremat)
+  k <- 100
+  myColors<-maPalette(low="blue",mid="white",high="red",k=k)
+  myBreaks<-seq(-2,2,length.out=(k+1))
+  #heatmap.2(zscoremat_mat,trace="none",col=myColors,breaks=myBreaks,margins=c(1,20),dendrogram="row",cexRow =1, offsetRow=0,main=geneSetName,labCol=colnames(zscoremat_mat),Colv="NA")
+  heatmap.2(zscoremat_mat,trace="none",col=myColors,breaks=myBreaks,dendrogram="row",main=geneSetName)
+}
+#THIS IS WITH A heatmap.2 image, can also try ggplot tile graph 
+```
+
+```{r biocarta_gsea_overview}
+pdf("biocarta_gsea_overview_contrasts.pdf")
+gseaOverviewPlot(p,annotation,"biocarta_gs")
+dev.off()
+```
+
+```{r kegg_gsea_overview,eval=FALSE}
+#gseaOverviewPlot(p,annotation,"kegg_gs")
+```
+
+```{r reactome_gsea_overview}
+pdf("reactome_gsea_overview_contrasts.pdf")
+gseaOverviewPlot(p,annotation,"reactome_gs")
+dev.off()
+```
+
+
