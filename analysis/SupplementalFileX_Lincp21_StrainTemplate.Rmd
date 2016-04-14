@@ -1,0 +1,870 @@
+```{r standalone setup, echo=FALSE}
+strain<-"Trp53cor1"
+timepoint<-"Embryonic"
+filename<-"Liver"
+dir<-"/n/rinn_data2/users/agroff/seq/OtherMice/Diana/lincP21/diff/Trp53cor1_E14.5_Liver_b0329/"
+```
+
+`r strain` KO vs WT (`r timepoint`)
+======================================
+
+```{r init, echo=FALSE} 
+# Setup + knitr opts
+opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE,fig.height=4, fig.width=4,dev=c('png', 'pdf'))
+alpha<-0.05 
+strain<-"Trp53cor1"
+GTF <- "/n/rinn_data2/seq/lgoff/Projects/BrainMap/data/annotation/mm10_gencode_vM2_with_lncRNAs_and_LacZ.gtf"
+genome<-"mm10"
+```
+
+```{r vars_and_setup,echo=FALSE,results='hide',message=FALSE}
+library(cummeRbund)
+library(xtable)
+library(limma)
+library(GSA)
+library(gplots)
+library(marray)
+library(ggplot2)
+library(gtable)
+library(gridExtra)
+library(RColorBrewer)
+library(RMySQL)
+
+p53_gs<-GSA.read.gmt("/n/rinn_data2/users/agroff/seq/OtherMice/Diana/lincP21/diff/p53_genesets/p53_genesets.gmt")
+reactome_gs <- GSA.read.gmt("/n/rinn_data2/users/agroff/GSEA/c2.cp.reactome.v4.0.symbols.gmt")
+biocarta_gs <- GSA.read.gmt("/n/rinn_data2/users/agroff/GSEA/c2.cp.biocarta.v4.0.symbols.gmt")
+
+oncogene_gs<-GSA.read.gmt("/n/rinn_data2/annotations/gsea/msigdb_v4.0_files_to_download_locally/msigdb_v4.0_GMTs/c6.all.v4.0.symbols.gmt")
+
+deletionCoords<-read.table("/n/rinn_data2/users/agroff/Brainmap/BrainMap/analysis/mm10DeletionCoords.txt",sep="\t",header=TRUE,stringsAsFactors=FALSE)
+colnames(deletionCoords)<-c("gene_name","gene_region","deletionRegion")
+```
+
+```{r cummeRbund_and_data_setup, echo=FALSE}
+cuff<-readCufflinks(dir=dir,gtfFile="/n/rinn_data2/seq/lgoff/Projects/BrainMap/data/annotation/mm10_gencode_vM2_with_lncRNAs_and_LacZ.gtf",genome="mm10")
+#cuff<-readCufflinks(dir=dir,gtfFile="/Volumes/Odyssey/seq/OtherMice/Diana/lincP21/analysis/mm10_gencode_vM2_with_lncRNAs_and_LacZ.gtf",genome="mm10")
+reps<-replicates(cuff)
+files<-lapply(reps$file,function(x){strsplit(x, "/")})
+
+#field 11 will be JR number 
+files<-as.data.frame(files)
+samples<-(t(files[11,]))
+if(grepl("brain",sample)){
+  samples<-t(files[10,])
+}
+rownames(samples)<-NULL
+```
+
+This file shows the wt-v-ko comparison for `r strain`. 
+
+Cuff overview:
+
+```{r}
+cuff
+```
+
+# QC
+
+## Dispersion
+
+Dispersion plot for genes in cuff:
+(Overdispersion can lead to innacurate quants)
+
+```{r dispersion}
+dispersionPlot(cuff)+theme_bw()
+```
+
+## Cross-replicate variability (fpkmSCVplot)
+Differences in CV 2 can result in lower numbers of differentially expressed genes due to a higher degree of variability between replicate fpkm estimates.
+
+Genes:
+
+```{r CV_genes}
+fpkmSCVPlot(genes(cuff))+theme_bw()
+```
+
+Isoforms: 
+
+```{r cv_iso}
+fpkmSCVPlot(isoforms(cuff))+theme_bw()
+```
+
+## MvA plot
+
+```{r MvA}
+strain_sample<-gsub("-","_",strain)#paste(strain,"_0",sep="")
+MAplot(genes(cuff),"WT",strain_sample)+theme_bw()
+```
+   
+### MvA plot counts
+
+```{r MvA_counts}
+MAplot(genes(cuff),"WT",strain_sample,useCount=T)+theme_bw()
+```
+
+## Scatterplot matrix
+
+```{r scatterplot}
+#csScatterMatrix(genes(cuff))+theme_bw()
+csScatterMatrix(genes(cuff),replicates=TRUE)+theme_bw()
+```
+
+## Distributions
+
+### Boxplots
+
+Boxplot (genes)
+
+```{r boxplot_genes}
+csBoxplot(genes(cuff))+theme_bw()
+```
+
+Boxplot (genes, replicates)
+
+```{r boxplot_genes_replicates, fig.width=8}
+csBoxplot(genes(cuff),replicates=T)+theme_bw()
+```
+
+Boxplot (isoforms)
+
+```{r boxplot_isoforms}
+csBoxplot(isoforms(cuff))+theme_bw()
+```
+
+Boxplot (isoforms, replicates)
+
+```{r boxplot_isoforms_replicates, fig.width=8}
+csBoxplot(isoforms(cuff), replicates=T)+theme_bw()
+```
+
+### Density
+
+Density (genes)
+
+```{r density}
+csDensity(genes(cuff),pseudocount=0.001)+theme_bw()
+```
+
+Density (genes, replicates)
+
+```{r density_w_replicates}
+csDensity(genes(cuff),pseudocount=0.001,replicates=T)+theme_bw()
+```
+
+
+## Clustering
+
+### Replicate Clusters
+
+```{r replicate_clusters, fig.height=8,fig.width=8}
+csDendro(genes(cuff),replicates=T)+theme_bw()
+```
+
+### PCA (genes)
+
+```{r PCA, fig.height=8, fig.width=8}
+PCAplot(genes(cuff),"PC2","PC3", replicates=T)+theme_bw()
+```
+
+### MDS (genes)
+
+```{r MDS,fig.height=8, fig.width=8}
+MDSplot(genes(cuff),replicates=T)+theme_bw()
+```
+
+
+```{r R_distance_heatmap, eval=FALSE }
+csDistHeat(genes(cuff), replicates=T)+theme_bw()
+```
+
+
+# KO assessment
+
+## Endogenous lncRNA expression
+
+```{r lincp21, fig.width=7, fig.height=6}
+lincp21<-getGene(cuff,"Trp53cor1")
+lacZ<-getGene(cuff,"LacZ")
+expressionBarplot(lincp21,replicates=TRUE)+ylim(0,2)+theme_bw()
+```
+
+```{r lacZ, fig.width=7, fig.height=6}
+expressionBarplot(lacZ,replicates=TRUE)+ylim(0,7)+theme_bw()
+```
+
+## Digital Genotyping (LacZ vs Endogenous lncRNA and Sex)
+
+Eif2s3y is a y-expressed gene, Xist is an x-expressed gene 
+Expression plot (endogenous linc, lacZ, Y-expressed gene):
+
+```{r Digital_Genotyping,fig.height=8, fig.width=8}
+genotypingGeneIDs<-c(strain,"LacZ","Eif2s3y","Xist")
+genotypingGenes<-getGenes(cuff,genotypingGeneIDs)
+expressionBarplot(genotypingGenes,replicates=T)
+```
+
+Expression heatmap:
+
+```{r digital_geno_heatmap, fig.height=4, fig.width=8}
+csHeatmap(genotypingGenes,replicates=T)+coord_equal()
+```
+
+### Track visualization 
+
+```{r track_vis, fig.height=15, fig.width=10}
+name<-strain
+myGene<-getGene(cuff,name)
+
+library(GenomicFeatures)
+library(Gviz)
+
+real_chromInfo<-read.table("/n/rinn_data2/users/agroff/Brainmap/BrainMap/abbie_annotation/real_chromosomes_mm10_brainmap.chrom.info",header=TRUE)
+genome<-"mm10"
+
+mm10DB<-loadDb("/n/rinn_data2/users/agroff/Brainmap/BrainMap/analysis/mm10gencode_brainmapDB_nolacz.sqlite")
+
+#Helper Functions
+movingAverage <- function(x, n=10, centered=TRUE) {
+  
+  if (centered) {
+    before <- floor  ((n-1)/2)
+    after  <- ceiling((n-1)/2)
+  } else {
+    before <- n-1
+    after  <- 0
+  }
+  
+  # Track the sum and count of number of non-NA items
+  s     <- rep(0, length(x))
+  count <- rep(0, length(x))
+  
+  # Add the centered data
+  new <- x
+  # Add to count list wherever there isn't a
+  count <- count + !is.na(new)
+  # Now replace NA_s with 0_s and add to total
+  new[is.na(new)] <- 0
+  s <- s + new
+  
+  # Add the data from before
+  i <- 1
+  while (i <= before) {
+    # This is the vector with offset values to add
+    new   <- c(rep(NA, i), x[1:(length(x)-i)])
+    
+    count <- count + !is.na(new)
+    new[is.na(new)] <- 0
+    s <- s + new
+    
+    i <- i+1
+  }
+  
+  # Add the data from after
+  i <- 1
+  while (i <= after) {
+    # This is the vector with offset values to add
+    new   <- c(x[(i+1):length(x)], rep(NA, i))
+    
+    count <- count + !is.na(new)
+    new[is.na(new)] <- 0
+    s <- s + new
+    
+    i <- i+1
+  }
+  
+  # return sum divided by count
+  s/count
+}
+
+makeBamTrack<-function(bamFile,bamName,genome=genome,chromosome,color="steelblue",window=20,ylim=c(0,10)){
+  
+track<-DataTrack(range=bamFile,name=bamName,genome=genome,type="h",transformation=function(x){movingAverage(x,window)},col=color,fill.histogram=color,col.histogram=color,chromosome=chromosome, ylim=ylim, lwd=1.5)
+  
+  return(track)
+}
+
+### Constants #########
+annot<-annotation(myGene)
+margin<-5000
+locus<-strsplit(annot$locus,":")
+locus<-unlist(locus)
+chrom<-locus[[1]]
+start_and_end<-strsplit(locus[[2]],"-")
+start_and_end<-unlist(start_and_end)
+from<-as.numeric(start_and_end[[1]])-margin
+#from<-as.numeric(start_and_end[[1]])-5000
+to<-as.numeric(start_and_end[[2]])+margin
+#to<-as.numeric(start_and_end[[2]])+28000
+genetrack<-GeneRegionTrack(mm10DB,rstarts=from,rends=to,chromosome=chrom,showId=TRUE,geneSymbol=TRUE,genome=genome,name="LincRNA Isoforms",fill="steelblue")
+
+JRs<-samples
+
+colnames(deletionCoords)<-c("gene_name","gene_region","deletionRegion")
+koStrain<-strain
+coords<-deletionCoords[which(deletionCoords$gene_name==koStrain),3]
+coords<-strsplit(coords,":")
+coords<-unlist(coords)
+koChr<-coords[1]
+positions<-strsplit(coords[[2]],"-")
+positions<-unlist(positions)
+koStart<-as.numeric(positions[1])
+koWidth<-abs(as.numeric(positions[2])-as.numeric(positions[1]))
+
+bamRoot<-'/n/rinn_data2/users/agroff/seq/OtherMice/Diana/lincP21/bam/'
+
+#if tissue is brain:: 
+if(grepl("brain",sample)){
+  bamRoot<-"/n/rinn_data2/seq/lgoff/Projects/BrainMap/data/bam/"
+}
+
+bamFiles<-lapply(JRs,function(x){paste(bamRoot,x,"/accepted_hits.bam",sep="")})
+
+bamNames<-reps$rep_name
+
+specCols<-brewer.pal(3,"Paired")
+colPal<-colorRampPalette(specCols)
+bamColors<-colPal(length(bamFiles))
+
+
+doPlot<-function(genome=genome,name,myChr,from,to,window,bamFiles,bamNames,koStart,koWidth,koChr){
+  #Make Tracks
+  axTrack<-GenomeAxisTrack(add53 = TRUE,add35 = TRUE, labelPos = "above")
+  idxTrack <- IdeogramTrack(genome = genome, chromosome = myChr)
+  koTrack<-AnnotationTrack(start=koStart,width=koWidth,chromosome=koChr,strand="*",id=koStrain,genome="mm10",name="KO Region")
+  #BamTracks
+  write("\tBamTracks",stderr())
+  bamTracks<-list()
+  bamOrder<-c(1:length(bamFiles))
+
+  for (i in bamOrder){
+    track<-makeBamTrack(bamFiles[[i]],bamNames[[i]],genome=genome,chromosome=myChr,color=bamColors[i],window=window)
+    bamTracks<-c(bamTracks,track)
+  }
+  
+  #Plot Tracks
+  write("\tplotting...",stderr())
+  # myTracks<-c(bamTracks,knownGenes)
+  myTracks<-c(idxTrack,axTrack,genetrack,bamTracks,koTrack)
+  trackSizes<-c(1,1,4,rep(1,length(bamTracks)),1)
+
+  plotTracks(myTracks,from=from,to=to,chromosome=myChr,showAxis=FALSE,background.title="black",col.title="white",col.axis="black",sizes=trackSizes,geneSymbol=TRUE)
+}
+
+pdf("lincp21_tracks_leg_10scale.pdf")
+doPlot(genome=genome, name=name, myChr=chrom, from=from, to=to, window=20,bamFiles=bamFiles, bamNames=bamNames, koStart=koStart,koWidth=koWidth,koChr=koChr)
+dev.off()
+detach("package:GenomicFeatures")
+
+```
+
+# Differential Analysis
+
+## Differential Genes 
+
+```{r differential_genes}
+sig<-getSig(cuff,alpha=0.05)       
+sigGenes<-getGenes(cuff,sig)
+geneAnnot<-annotation(sigGenes)
+geneDat<-diffData(sigGenes)
+
+num<-length(sig)
+if (length(sig)==0){num=0}
+
+```
+
+There are `r num` significantly differentially expressed genes. They are:
+
+```{r sigdiffGenetable, results="asis", fig.height=8, fig.width=12}
+if(length(sig)>0){
+  print(xtable(as.data.frame(geneAnnot$gene_short_name)),type="html")
+  siggenedataframe<-merge(geneAnnot,geneDat,by.x="gene_id",by.y="gene_id")
+  limits<-c(-5,5)
+  genelist<-ggplot(siggenedataframe)+geom_tile(aes(x=sample_1,y=reorder(gene_short_name,log2_fold_change),fill=log2_fold_change))+scale_fill_gradient2(low="blue",mid="white",high="red",limits=limits)+theme_bw()+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank(),axis.text.y=element_text())+xlab("FoldChange wtr KO")+ylab("Gene Name") 
+  genelist
+}else{print("No sig genes!")}
+```
+
+Expression heatmap of sigGenes
+
+```{r sigExpression heatmap, fig.height=8, fig.width=10}
+csHeatmap(sigGenes, cluster="both",replicates=T)+theme_bw()
+```
+
+Foldchange heatmap of sigGenes 
+
+```{r DEgenes_FC_Heatmap, fig.width=7, fig.height=6}
+csFoldChangeHeatmap(sigGenes,"WT",replicates=TRUE,replicate_num=0,cluster="row")
+```
+
+
+```{r expressed_and_changing, fig.width=7, fig.height=6}
+csFoldChangeHeatmap(genes,"WT",replicates=TRUE,replicate_num=0,cluster="both")
+```
+
+```{r expressedandchanging_sig_setup}
+sig<-dat[which(dat$significant=="yes"),]
+ids<-sig$gene_id
+genes<-getGenes(cuff,ids)
+```
+
+### Expression-level/significance relationship
+
+Scatter plot of significant genes only:
+
+```{r expression-sig_relationship}
+csScatter(sigGenes, "WT", strain_sample, smooth=T)+theme_bw()
+```
+
+Volcano Plot
+
+```{r volcano,eval=TRUE}
+csVolcano(genes(cuff),"WT",strain_sample,alpha=alpha,xlimits=c(-10,10),showSignificant=TRUE)+theme_bw()
+```
+
+Volcano plot with significant genes only:
+
+```{r sig_volcano}
+csVolcano(sigGenes, "WT", strain_sample,showSignificant=TRUE,alpha=alpha,xlimits=c(-10,10))+theme_bw()
+```
+
+
+# Gene/Pathway Analysis
+
+##
+
+Enrichment and zscores are calculated based on expression in KO vs WT (fpkmKO/fpkmWT), so genes that are down regulated in KO are shown in blue, while upregulation is shown in red. 
+
+KO/WT
+Blue = down in KO
+Red = Up in KO
+
+```{r gsea_helper_functions}
+population<-genes(cuff)
+population.diff<-diffData(population)
+annotation<-annotation(genes(cuff))
+
+gene_names<-merge(annotation,population.diff)
+
+gene_set_index <- function(genelist, short_names){
+  which(short_names %in% genelist)   
+}
+
+get_gene_set_p_vals <- function(input, gs, alternative){
+  gene_set_indices <- lapply(gs$genesets, function(genelist){
+    gene_set_index(genelist,input$short_name)
+    })
+  pvl<-lapply(gene_set_indices,geneSetTest,input$test_stat, alternative=alternative)
+  pvl_mat<-as.data.frame(t(unlist(pvl)))
+  colnames(pvl_mat) <- gs$geneset.names
+   return(pvl_mat)
+}
+ 
+get_gene_set_q_vals <- function(pvl_mat, method="bonferroni"){
+  comp_corrected <- matrix(p.adjust(pvl_mat, method=method), nrow=nrow(pvl_mat), ncol=ncol(pvl_mat))
+  colnames(comp_corrected) <- colnames(pvl_mat)
+	rownames(comp_corrected) <- rownames(pvl_mat)
+	return(comp_corrected)
+}
+
+colMins<-function(x){
+  apply(x,2,min)
+}
+rowMins<-function(x){
+  apply(x,1,min)
+}
+ 
+InputCols<-maPalette(low="white",high="red",k=100)
+
+ztest<-function(samp,pop){
+  (mean(samp,na.rm=T)-mean(pop,na.rm=T))/sd(pop,na.rm=T)
+}
+
+get_gene_set_ztest <- function(scoring_df, gs){  
+  gene_set_indices <- lapply(gs$genesets, function(genelist){
+    gene_set_index(genelist, scoring_df$short_name)
+    })
+  zscores <- lapply(gene_set_indices,function(gsi){
+					ztest(scoring_df$test_stat[gsi],scoring_df$test_stat)
+          })  
+	zscore_mat<-do.call(rbind,lapply(zscores,unlist))
+	rownames(zscore_mat) <- gs$geneset.names
+	colnames(zscore_mat) <- "zscore"
+	return(zscore_mat)
+}
+```
+
+```{r gsea}
+df.pop<-data.frame("short_name"=toupper(gene_names$gene_short_name),"test_stat"=gene_names$test_stat)
+df.pop.unique<-unique(df.pop)
+rownames(df.pop.unique)<-NULL
+df.pop.unique.ordered<-df.pop.unique[order(df.pop.unique$test_stat),]
+Input.df<-df.pop.unique.ordered
+Input.df$short_name<-as.character(Input.df$short_name)
+gseaInput.df<-Input.df
+gseaInput.df$test_stat[which(is.na(gseaInput.df$test_stat))]<-0
+
+reactome_pvl_mat <- get_gene_set_p_vals(Input.df, reactome_gs,alternative="either")
+reactome_pvl_corrected <- get_gene_set_q_vals(reactome_pvl_mat)
+reactome_pvl_corrected<-rbind(reactome_pvl_corrected,reactome_pvl_corrected)
+
+p53_pval_mat<-get_gene_set_p_vals(Input.df, p53_gs,alternative="either")
+p53_pval_corrected<-get_gene_set_q_vals(p53_pval_mat)
+p53_pval_corrected<-rbind(p53_pval_corrected,p53_pval_corrected)
+
+biocarta_pvl_mat <- get_gene_set_p_vals(Input.df, biocarta_gs, alternative="either")
+biocarta_pvl_corrected <- get_gene_set_q_vals(biocarta_pvl_mat)
+biocarta_pvl_corrected<-rbind(biocarta_pvl_corrected,biocarta_pvl_corrected)
+
+
+reactome_zscores<-get_gene_set_ztest(Input.df,reactome_gs)
+reactome_zscores<-cbind(reactome_zscores,reactome_zscores)
+
+p53_zscores<-get_gene_set_ztest(Input.df,p53_gs)
+p53_zscores<-cbind(p53_zscores,p53_zscores)
+
+biocarta_zscores<-get_gene_set_ztest(Input.df,biocarta_gs)
+biocarta_zscores<-cbind(biocarta_zscores,biocarta_zscores)
+
+
+k <- 100
+myColors<-maPalette(low="blue",mid="white",high="red",k=k)
+myBreaks<-seq(-2,2,length.out=(k+1))
+enrichmentBreaks<-seq(0,6,length.out=(k+1))
+```
+
+Biocarta enrichment: 
+
+```{r print_GSEA_biocarta, fig.height=8, fig.width=8}
+InputCols<-maPalette(low="white",high="red",k=100)
+
+x<-(-log10(t(biocarta_pvl_corrected[,which(colMins(biocarta_pvl_corrected) < 0.01)])))
+x_ordered<-x[order(x[,1], decreasing=TRUE),]
+if(length(x_ordered)>50){x_ordered<-x_ordered[1:50,]}
+noinfinities_x<-x_ordered[which(x_ordered !="Inf")]
+x_max<-max(noinfinities_x)+100
+x_ordered[x_ordered=="Inf"]<-x_max
+x_ordered<-as.matrix(x_ordered)
+
+if(dim(x_ordered)[1]>1){
+  heatmap.2(x_ordered, trace="none",col=InputCols,breaks=enrichmentBreaks, margins=c(1,20),dendrogram="both",labCol=c(""),cexRow = 1, offsetRow=0)
+}else{print("Not enough significant categories to print a heatmap!")}
+
+rm(x_ordered)
+rm(x)
+```
+
+Biocarta zscore: 
+
+```{r gsea_zscore_biocarta, fig.height=8, fig.width=8}
+x<-((biocarta_zscores[which(colMins(biocarta_pvl_corrected) < 0.01),]))
+x_ordered<-x[order(x[,1], decreasing=TRUE),]
+if(length(x_ordered)>50){x_ordered<-x_ordered[1:50,]}
+x_ordered<-as.matrix(x_ordered)
+
+if(dim(x_ordered)[1]>1){
+heatmap.2(x_ordered, trace="none",col=myColors,breaks=myBreaks,margins=c(1,20),dendrogram="both",labCol=c(""),cexRow =1, offsetRow=0)
+}else{print("Not enough significant categories to print a heatmap!")}
+rm(x_ordered)
+rm(x)
+```
+
+Reactome enrichment:
+
+```{r print_GSEA_reactome, fig.width=10, fig.height=12}
+#pdf("components_GSEA_reactome.pdf",width=10,height=30)
+
+InputCols<-maPalette(low="white",high="red",k=100)
+
+x<-(-log10(t(reactome_pvl_corrected[,which(colMins(reactome_pvl_corrected) < 0.001)])))
+x_ordered<-x[order(x[,1], decreasing=TRUE),]
+if(length(x_ordered)>50){x_ordered<-x_ordered[1:50,]}
+noinfinities_x<-x_ordered[which(x_ordered !="Inf")]
+x_max<-max(noinfinities_x)+100
+x_ordered[x_ordered=="Inf"]<-x_max
+
+if(dim(x_ordered)[1]>1){
+  heatmap.2(x_ordered, trace="none",col=InputCols,breaks=enrichmentBreaks, margins=c(1,20),dendrogram="both",labCol=c(""),cexRow =1, offsetRow=0)
+}else{print("Not enough significant categories to print a heatmap!")}
+rm(x_ordered)
+rm(x)
+
+#dev.off()
+```
+
+Reactome zscore: 
+
+```{r gsea_zscore_reactome, fig.width=10, fig.height=12}
+
+x<-reactome_zscores[which(colMins(reactome_pvl_corrected) < 0.001),]
+
+x_ordered<-x[order(x[,1], decreasing=TRUE),]
+
+if(length(x_ordered)>50){x_ordered<-x_ordered[1:50,]}
+x_ordered<-as.matrix(x_ordered)
+
+if(dim(x_ordered)[1]>1){
+heatmap.2(x_ordered, trace="none",col=myColors,breaks=myBreaks,margins=c(1,20),dendrogram="both",labCol=c(""),cexRow = 1, offsetRow=0)
+}else{print("Not enough significant categories to print a heatmap!")}
+
+rm(x_ordered)
+rm(x)
+```
+
+
+
+p53 enrichment: 
+
+```{r gsea_enrichment_p53, fig.width=10, fig.height=12}
+InputCols<-maPalette(low="white",high="red",k=100)
+
+x<-(-log10(t(p53_pval_corrected[,which(colMins(p53_pval_corrected) < 0.001)])))
+x_ordered<-x[order(x[,1], decreasing=TRUE),]
+if(length(x_ordered)>50){x_ordered<-x_ordered[1:50,]}
+noinfinities_x<-x_ordered[which(x_ordered !="Inf")]
+x_max<-max(noinfinities_x)+100
+x_ordered[x_ordered=="Inf"]<-x_max
+
+if(dim(x_ordered)[1]>1){
+  heatmap.2(x_ordered, trace="none",col=InputCols,breaks=enrichmentBreaks, margins=c(1,20),dendrogram="both",labCol=c(""),cexRow =1, offsetRow=0)
+}else{print("Not enough significant categories to print a heatmap!")}
+
+rm(x_ordered)
+rm(x)
+```
+
+p53 zscore: 
+
+```{r gsea_zscore_p53, fig.width=10, fig.height=12}
+
+x<-p53_zscores[which(colMins(p53_pval_corrected) < 0.001),]
+
+x_ordered<-x[order(x[,1], decreasing=TRUE),]
+
+if(length(x_ordered)>50){x_ordered<-x_ordered[1:50,]}
+x_ordered<-as.matrix(x_ordered)
+
+if(dim(x_ordered)[1]>1){
+heatmap.2(x_ordered, trace="none",col=myColors,breaks=myBreaks,margins=c(1,20),dendrogram="both",labCol=c(""),cexRow = 1, offsetRow=0)
+}else{print("Not enough significant categories to print a heatmap!")}
+
+rm(x_ordered)
+rm(x)
+```
+
+
+## GO enrichment 
+Cluster profiler used to call enichments of significantly differentially regulated genes that map to Entrez IDs. 
+
+```{r GO_setup}
+library(ReactomePA)
+library(DOSE)
+
+sigGeneIDs<-getSig(cuff, alpha=alpha)
+sigGenes<-getGenes(cuff,sigGeneIDs)
+geneAnnot<-annotation(sigGenes)
+geneNames<-geneAnnot$gene_short_name
+sigDiff<-diffData(sigGenes)
+sigDiff$foldChange<-sigDiff$value_1/sigDiff$value_2
+```
+
+```{r GO analysis setup and functions}
+library(clusterProfiler)
+require(biomaRt)
+
+ensembl <- useMart("ENSEMBL_MART_ENSEMBL","mmusculus_gene_ensembl", 
+host="www.ensembl.org")
+
+#Get entrezIDs
+getEntrezIDs<-function (geneNames)
+{
+    tmp <- getBM(attributes = c("entrezgene"), filters = "mgi_symbol", values = geneNames, mart = ensembl)
+    tmp
+}
+sigEntrez<-getEntrezIDs(geneNames)
+sigEZ<-strsplit(as.character(sigEntrez), ", ")
+sigEZ<-unlist(sigEZ)
+require(org.Mm.eg.db) #mapping of entrez IDs to genbank
+
+goBP<-enrichGO(gene=sigEZ, organism="mouse",ont="BP",pvalueCutoff=0.01,readable=T)
+
+goMF<-enrichGO(gene=sigEZ, organism="mouse",ont="MF",pvalueCutoff=0.01,readable=T)
+
+goCC<-enrichGO(gene=sigEZ, organism="mouse",ont="CC",pvalueCutoff=0.01,readable=T)
+
+kegg<-enrichKEGG(gene=sigEZ, organism="mouse",pvalueCutoff=.01, readable=T)
+
+pathway<-enrichPathway(gene=sigEZ,organism="mouse",pvalueCutoff=0.01, readable=T)
+
+```
+
+```{r GO_figures,  fig.height=5, fig.width=8}
+plot(goBP,showCategory=20) + theme(axis.text.x=element_text(angle=-90,hjust=0)) + ggtitle("Enriched BP")+theme_bw()
+
+plot(goMF,showCategory=20) + theme(axis.text.x=element_text(angle=-90,hjust=0)) + ggtitle("Enriched MF")+theme_bw()
+
+plot(goCC,showCategory=20) + theme(axis.text.x=element_text(angle=-90,hjust=0)) + ggtitle("Enriched CC")+theme_bw()
+
+plot(kegg, showCategory=20) + ggtitle("Kegg Pathways")+theme_bw()
+
+plot(pathway,showCategory=20) + ggtitle("Reactome pathway enrichment")+theme_bw()
+detach("package:biomaRt")
+```
+
+# Cis vs Trans (locally)
+
+log2 Foldchange and test statistic are calculated with the ratio of fpkm(KO)/fpkm(WT), thus the test_stat is positive if a gene is higher in the KO and negative if a gene has lower expression in the KO
+
+``` {r cis_v_trans_table_and_pvalcalculation}
+library(BSgenome.Mmusculus.UCSC.mm10)
+library(seqbias)
+library(stringr)
+library(plyr)
+
+strain_name<-strain
+
+myLengths<-seqlengths(Mmusculus)[!grepl("_random",names(seqlengths(Mmusculus)))]
+mm10.granges<-GRanges(seqnames = names(myLengths), ranges = IRanges(start = 1, end = myLengths),seqlengths=myLengths)
+
+#Constants
+nIter<-10000
+windowSize<-4000000
+set.seed(1)
+myRandom<-random.intervals(mm10.granges,n=nIter,ms=windowSize)
+
+getTable<-function(object){
+  fullTable<-diffTable(genes(object))
+  write("First Split",stderr())
+  firstSplit<-str_split_fixed(fullTable$locus,":",2)
+  write("Second Split",stderr())
+  secondSplit<-str_split_fixed(firstSplit[,2],"-",2)
+  fullTable$chromosome<-firstSplit[,1]
+  fullTable$start<-as.numeric(secondSplit[,1])
+  fullTable$end<-as.numeric(secondSplit[,2])
+  fullTable<-fullTable[fullTable$chromosome %in% names(seqlengths(mm10.granges)),]
+  fullTable$chromosome<-factor(fullTable$chromosome, levels=names(seqlengths(mm10.granges)))
+  fullTable
+}
+```
+
+```{r computationally intensive part of cis trans image}
+fullTable<-getTable(cuff)
+
+myGene<-fullTable[which(fullTable$gene_short_name==strain),][1,]
+chromosome<-myGene$chromosome
+locuslength=abs(myGene$start-myGene$end)
+start<-myGene$start-(windowSize/2-locuslength/2)
+end<-myGene$end+(windowSize/2-locuslength/2)
+
+#exclude lincRNA in significance calc...
+sigGenesRegion<-fullTable[which(fullTable[,40]==chromosome & fullTable[,39]=="yes" & fullTable[,9]>=start & fullTable[,10]<=end & fullTable[,4]!=strain),]
+
+numGenesInRegion<-fullTable[which(fullTable[,40]==chromosome & fullTable[,9]>=start & fullTable[,10]<=end),]
+
+
+nSig<-nrow(ddply(sigGenesRegion,.(gene_name),head,n=1))
+nGenes_lncRNA<-nrow(ddply(numGenesInRegion,.(gene_id),head,n=1))
+
+score<-0
+signeighbors<-data.frame(rep(NULL,nIter))
+numGenesRegionList<-list()
+
+for (i in 1:nIter){
+  #write(i,stderr())
+  sigGenesRegion<-fullTable[which(fullTable[,40]==seqnames(myRandom[i])@values & fullTable[,39]=="yes" & fullTable[,9]>=start(myRandom[i])-(windowSize/2) & fullTable[,10]<=end(myRandom[i])+(windowSize/2)),]
+  nSigIter<-nrow(ddply(sigGenesRegion,.(gene_name),head,n=1))
+  
+  numGenesRegion<-fullTable[which(fullTable[,40]==seqnames(myRandom[i])@values & fullTable[,9]>=start(myRandom[i])-(windowSize/2) & fullTable[,10]<=end(myRandom[i])+(windowSize/2)),]
+  nGenes<-nrow(ddply(numGenesRegion,.(gene_id),head,n=1))
+  numGenesRegionList[i]<-nGenes
+  
+  #write(nSigIter,stderr())
+  if(nSigIter >= nSig) {score<-score+1}
+  signeighbors[1,i]<-nSigIter
+}
+
+pval_for_region<-score/nIter
+
+numGenesinRandomRegions<-unlist(numGenesRegionList)
+hist(numGenesinRandomRegions,100)+abline(v=nGenes_lncRNA)
+#put a pvalue on this calc z score . two-sided pval is is this different. one sided is this greater or less than random 
+#t distribution bc from random samples 
+n<-nIter
+mean<-mean(numGenesinRandomRegions)
+s<-sd(numGenesinRandomRegions)
+t<-(mean-nGenes_lncRNA)/(s/sqrt(n)) #http://www.cyclismo.org/tutorial/R/pValues.html
+paste("t-stat is:",t,sep=" ")
+pval<-2*pt(-abs(t),df=n-1)
+paste(paste("2-sided p value for ",nGenes_lncRNA,sep=""), paste("genes in a 4mb region, is: ",pval,sep=""),sep="")
+
+#chance that this is higher than normal gene cluster number and thus our DE sig region could be overinflated: t.test(numGenes,mu=nGenes_lnc,alternative="less") #asks if true mean of pop is less than my val
+oneSidedttest<-t.test(numGenesinRandomRegions,mu=nGenes_lncRNA,alternative="less")
+paste("one sided t-test for if most windows have fewer genes than this window",oneSidedttest$p.value)
+oneSidedttest
+
+genesInRegion<-fullTable[which(fullTable[,40]==chromosome & fullTable[,9]>=start & fullTable[,10]<=end),]
+genesInRegion$start<-myGene$start-genesInRegion$start
+colnames(genesInRegion)[39]<-"sig"
+colnames(genesInRegion)[35]<-"log2foldchange"
+colnames(genesInRegion)[36]<-"test_stat"
+data<-ddply(genesInRegion,.(gene_id),head,n=1)
+data$test_stat<-as.numeric(data$test_stat)
+
+data$test_stat<-as.numeric(data[,36])
+data$was_na<-"no"
+if(any(is.na(data$test_stat))){
+  data$was_na[which(is.na(data$test_stat))]<-"yes"
+  data$test_stat[which(is.na(data$test_stat))]<-0
+}
+data$sig<-data[,39]
+  
+currplot<-ggplot(data,aes(start,test_stat,color=sig, label=gene_name,shape=was_na))+geom_point(size=3)+scale_color_manual(values=c("black", "red"))+coord_cartesian(xlim=c(-windowSize/2, windowSize/2),ylim=c(-max(abs(data$test_stat),na.rm=TRUE)-1,max(abs(data$test_stat),na.rm=TRUE)+1))+labs(title=paste(strain_name,timepoint,sep=" "))+geom_text(data=subset(data, sig=='yes'))+theme_bw()+geom_vline(xintercept=0, color="blue")+geom_hline(yintercept=0,color="blue")
+
+
+#log2foldchange
+
+data$log2foldchange<-as.numeric(data$log2foldchange)
+minInfIndecies<-which(data$log2foldchange=="-Inf")
+maxInfIndecies<-which(data$log2foldchange=="Inf")
+data$log2foldchange<-replace(data$log2foldchange,is.infinite(data$log2foldchange),NA)
+data$log2foldchange<-replace(data$log2foldchange,which(data$Trp53cor1_WT_status=="NOTEST"),NA)
+data$log2foldchange<-replace(data$log2foldchange,which(data$Trp53cor_WT_status=="NOTEST"),NA)
+data$log2foldchange<-replace(data$log2foldchange,minInfIndecies,min(data$log2foldchange,na.rm=TRUE))
+data$log2foldchange<-replace(data$log2foldchange,maxInfIndecies,max(data$log2foldchange,na.rm=TRUE))
+
+pdf("heart_cisplot_logfoldchange.pdf")
+
+ggplot(data,aes(start,log2foldchange,color=sig, label=gene_name))+geom_point(size=3)+scale_color_manual(values=c("black", "red"))+coord_cartesian(xlim=c(-windowSize/2, windowSize/2),ylim=c(-max(abs(data$log2foldchange),na.rm=TRUE)-1,max(abs(data$log2foldchange),na.rm=TRUE)+1))+labs(title=paste(strain_name,timepoint,sep=" "))+geom_text(data=subset(data, sig=='yes'))+theme_bw()+geom_vline(xintercept=0, color="blue")+geom_hline(yintercept=0,color="blue")
+
+dev.off()
+```
+
+The pvalue for genes significantly regulated in a region this size  is: `r pval_for_region` 
+
+```{r cisreg_image,  fig.height=8, fig.width=8}
+currplot
+```
+
+
+
+# Notes
+
+## Samples used are:
+```{r results='asis'}
+print(xtable(samples),type="html")
+```
+
+## Replicates
+```{r replicates, results='asis'}
+print(xtable(replicates(cuff)),type="html")
+```
+
+## Session Info
+```{r session}
+sessionInfo()
+```
+
+## Run Info
+```{r runInfo}
+runInfo(cuff)
+```
+
