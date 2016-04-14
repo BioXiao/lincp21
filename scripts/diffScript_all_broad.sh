@@ -134,17 +134,3 @@ ko_heart="/n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/quants/JR920/ab
 #-o $OUTDIR $REF_GTF \
 #$wt_leg $wt_liver $wt_heart $wt_brain_adult $wt_brain_embryo $wt_lung \
 #$ko_leg $ko_liver $ko_heart $ko_brain_adult $ko_brain_embryo $ko_lung"
-
-
-SAMPLE_NAME="BROAD_ALL_4_contrasts"
-AGE="ALL_TISSUES"
-OUTDIR=$DIFF_ROOT/${SAMPLE_NAME}_${AGE}
-mkdir -p $OUTDIR
-
-sbatch -J "${SAMPLE_NAME}" -t $RUN_TIME --mem=$MAX_MEM -N 1 -n $NUM_THREADS -p $QUEUE --mail-type=FAIL \
---wrap="cuffdiff -p $NUM_THREADS -C contrasts.txt -L \
-wt_leg,wt_liver,wt_heart,wt_brain_adult,wt_brain_embryo,wt_lung,\
-ko_leg,ko_liver,ko_heart,ko_brain_adult,ko_brain_embryo,ko_lung \
--o $OUTDIR $REF_GTF \
-$wt_leg $wt_liver $wt_heart $wt_brain_adult $wt_brain_embryo $wt_lung \
-$ko_leg $ko_liver $ko_heart $ko_brain_adult $ko_brain_embryo $ko_lung"
