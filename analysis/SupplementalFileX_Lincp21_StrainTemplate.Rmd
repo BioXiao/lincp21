@@ -1,8 +1,8 @@
 ```{r standalone setup, echo=FALSE}
-strain<-"Trp53cor1"
-timepoint<-"Embryonic"
-filename<-"Liver"
-dir<-"/n/rinn_data2/users/agroff/seq/OtherMice/Diana/lincP21/diff/Trp53cor1_E14.5_Liver_b0329/"
+#strain<-"Trp53cor1"
+#timepoint<-"Embryonic"
+#filename<-"Liver"
+#dir<-"/n/rinn_data2/users/agroff/seq/OtherMice/Diana/lincP21/diff/Trp53cor1_E14.5_Liver_b0329/"
 ```
 
 `r strain` KO vs WT (`r timepoint`)
@@ -13,7 +13,6 @@ dir<-"/n/rinn_data2/users/agroff/seq/OtherMice/Diana/lincP21/diff/Trp53cor1_E14.
 opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE,fig.height=4, fig.width=4,dev=c('png', 'pdf'))
 alpha<-0.05 
 strain<-"Trp53cor1"
-GTF <- "/n/rinn_data2/seq/lgoff/Projects/BrainMap/data/annotation/mm10_gencode_vM2_with_lncRNAs_and_LacZ.gtf"
 genome<-"mm10"
 ```
 
@@ -49,9 +48,6 @@ files<-lapply(reps$file,function(x){strsplit(x, "/")})
 #field 11 will be JR number 
 files<-as.data.frame(files)
 samples<-(t(files[11,]))
-if(grepl("brain",sample)){
-  samples<-t(files[10,])
-}
 rownames(samples)<-NULL
 ```
 
@@ -276,7 +272,7 @@ movingAverage <- function(x, n=10, centered=TRUE) {
   s/count
 }
 
-makeBamTrack<-function(bamFile,bamName,genome=genome,chromosome,color="steelblue",window=20,ylim=c(0,10)){
+makeBamTrack<-function(bamFile,bamName,genome=genome,chromosome,color="steelblue",window=20,ylim=c(0,60)){
   
 track<-DataTrack(range=bamFile,name=bamName,genome=genome,type="h",transformation=function(x){movingAverage(x,window)},col=color,fill.histogram=color,col.histogram=color,chromosome=chromosome, ylim=ylim, lwd=1.5)
   
@@ -285,7 +281,7 @@ track<-DataTrack(range=bamFile,name=bamName,genome=genome,type="h",transformatio
 
 ### Constants #########
 annot<-annotation(myGene)
-margin<-5000
+margin<-20000
 locus<-strsplit(annot$locus,":")
 locus<-unlist(locus)
 chrom<-locus[[1]]
@@ -311,14 +307,7 @@ koStart<-as.numeric(positions[1])
 koWidth<-abs(as.numeric(positions[2])-as.numeric(positions[1]))
 
 bamRoot<-'/n/rinn_data2/users/agroff/seq/OtherMice/Diana/lincP21/bam/'
-
-#if tissue is brain:: 
-if(grepl("brain",sample)){
-  bamRoot<-"/n/rinn_data2/seq/lgoff/Projects/BrainMap/data/bam/"
-}
-
 bamFiles<-lapply(JRs,function(x){paste(bamRoot,x,"/accepted_hits.bam",sep="")})
-
 bamNames<-reps$rep_name
 
 specCols<-brewer.pal(3,"Paired")
@@ -331,6 +320,7 @@ doPlot<-function(genome=genome,name,myChr,from,to,window,bamFiles,bamNames,koSta
   axTrack<-GenomeAxisTrack(add53 = TRUE,add35 = TRUE, labelPos = "above")
   idxTrack <- IdeogramTrack(genome = genome, chromosome = myChr)
   koTrack<-AnnotationTrack(start=koStart,width=koWidth,chromosome=koChr,strand="*",id=koStrain,genome="mm10",name="KO Region")
+  
   #BamTracks
   write("\tBamTracks",stderr())
   bamTracks<-list()
@@ -348,13 +338,11 @@ doPlot<-function(genome=genome,name,myChr,from,to,window,bamFiles,bamNames,koSta
   trackSizes<-c(1,1,4,rep(1,length(bamTracks)),1)
 
   plotTracks(myTracks,from=from,to=to,chromosome=myChr,showAxis=FALSE,background.title="black",col.title="white",col.axis="black",sizes=trackSizes,geneSymbol=TRUE)
-}
+  }
 
-pdf("lincp21_tracks_leg_10scale.pdf")
 doPlot(genome=genome, name=name, myChr=chrom, from=from, to=to, window=20,bamFiles=bamFiles, bamNames=bamNames, koStart=koStart,koWidth=koWidth,koChr=koChr)
-dev.off()
-detach("package:GenomicFeatures")
 
+detach("package:GenomicFeatures")
 ```
 
 # Differential Analysis
@@ -397,16 +385,6 @@ csFoldChangeHeatmap(sigGenes,"WT",replicates=TRUE,replicate_num=0,cluster="row")
 ```
 
 
-```{r expressed_and_changing, fig.width=7, fig.height=6}
-csFoldChangeHeatmap(genes,"WT",replicates=TRUE,replicate_num=0,cluster="both")
-```
-
-```{r expressedandchanging_sig_setup}
-sig<-dat[which(dat$significant=="yes"),]
-ids<-sig$gene_id
-genes<-getGenes(cuff,ids)
-```
-
 ### Expression-level/significance relationship
 
 Scatter plot of significant genes only:
@@ -429,8 +407,6 @@ csVolcano(sigGenes, "WT", strain_sample,showSignificant=TRUE,alpha=alpha,xlimits
 
 
 # Gene/Pathway Analysis
-
-##
 
 Enrichment and zscores are calculated based on expression in KO vs WT (fpkmKO/fpkmWT), so genes that are down regulated in KO are shown in blue, while upregulation is shown in red. 
 
@@ -658,8 +634,7 @@ Cluster profiler used to call enichments of significantly differentially regulat
 ```{r GO_setup}
 library(ReactomePA)
 library(DOSE)
-
-sigGeneIDs<-getSig(cuff, alpha=alpha)
+sigGeneIDs<-getSig(cuff, alpha=0.05)
 sigGenes<-getGenes(cuff,sigGeneIDs)
 geneAnnot<-annotation(sigGenes)
 geneNames<-geneAnnot$gene_short_name
@@ -671,8 +646,7 @@ sigDiff$foldChange<-sigDiff$value_1/sigDiff$value_2
 library(clusterProfiler)
 require(biomaRt)
 
-ensembl <- useMart("ENSEMBL_MART_ENSEMBL","mmusculus_gene_ensembl", 
-host="www.ensembl.org")
+ensembl <- useMart("ENSEMBL_MART_ENSEMBL","mmusculus_gene_ensembl",host="jul2015.archive.ensembl.org")
 
 #Get entrezIDs
 getEntrezIDs<-function (geneNames)
@@ -691,7 +665,7 @@ goMF<-enrichGO(gene=sigEZ, organism="mouse",ont="MF",pvalueCutoff=0.01,readable=
 
 goCC<-enrichGO(gene=sigEZ, organism="mouse",ont="CC",pvalueCutoff=0.01,readable=T)
 
-kegg<-enrichKEGG(gene=sigEZ, organism="mouse",pvalueCutoff=.01, readable=T)
+kegg<-enrichKEGG(gene=sigEZ, organism="mouse",pvalueCutoff=0.01, readable=T)
 
 pathway<-enrichPathway(gene=sigEZ,organism="mouse",pvalueCutoff=0.01, readable=T)
 
@@ -785,21 +759,21 @@ for (i in 1:nIter){
 pval_for_region<-score/nIter
 
 numGenesinRandomRegions<-unlist(numGenesRegionList)
-hist(numGenesinRandomRegions,100)+abline(v=nGenes_lncRNA)
+#hist(numGenesinRandomRegions,100)+abline(v=nGenes_lncRNA)
 #put a pvalue on this calc z score . two-sided pval is is this different. one sided is this greater or less than random 
 #t distribution bc from random samples 
 n<-nIter
 mean<-mean(numGenesinRandomRegions)
 s<-sd(numGenesinRandomRegions)
-t<-(mean-nGenes_lncRNA)/(s/sqrt(n)) #http://www.cyclismo.org/tutorial/R/pValues.html
-paste("t-stat is:",t,sep=" ")
-pval<-2*pt(-abs(t),df=n-1)
-paste(paste("2-sided p value for ",nGenes_lncRNA,sep=""), paste("genes in a 4mb region, is: ",pval,sep=""),sep="")
+#t<-(mean-nGenes_lncRNA)/(s/sqrt(n)) #http://www.cyclismo.org/tutorial/R/pValues.html
+#paste("t-stat is:",t,sep=" ")
+#pval<-2*pt(-abs(t),df=n-1)
+#paste(paste("2-sided p value for ",nGenes_lncRNA,sep=""), paste("genes in a 4mb region, is: ",pval,sep=""),sep="")
 
 #chance that this is higher than normal gene cluster number and thus our DE sig region could be overinflated: t.test(numGenes,mu=nGenes_lnc,alternative="less") #asks if true mean of pop is less than my val
-oneSidedttest<-t.test(numGenesinRandomRegions,mu=nGenes_lncRNA,alternative="less")
-paste("one sided t-test for if most windows have fewer genes than this window",oneSidedttest$p.value)
-oneSidedttest
+#oneSidedttest<-t.test(numGenesinRandomRegions,mu=nGenes_lncRNA,alternative="less")
+#paste("one sided t-test for if most windows have fewer genes than this window",oneSidedttest$p.value)
+#oneSidedttest
 
 genesInRegion<-fullTable[which(fullTable[,40]==chromosome & fullTable[,9]>=start & fullTable[,10]<=end),]
 genesInRegion$start<-myGene$start-genesInRegion$start

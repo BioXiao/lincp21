@@ -194,15 +194,13 @@ No id variables; using all as measure variables
 Using tracking_id, rep_name as id variables
 No id variables; using all as measure variables
 Using tracking_id, sample_name as id variables
-Error in lm.wfit(x, y, w, offset = offset, singular.ok = singular.ok,  : 
-  NA/NaN/Inf in 'y'
+Error in seq.default(range[1], range[2], length = n) : 
+  'from' cannot be NA, NaN or infinite
 In addition: Warning messages:
 1: In file(file, "r") :
   cannot open file '/n/rinn_data2/annotations/gsea/msigdb_v4.0_files_to_download_locally/msigdb_v4.0_GMTs/c6.all.v4.0.symbols.gmt': No such file or directory
-2: Removed 5428 rows containing missing values (geom_point). 
-3: Removed 5428 rows containing missing values (geom_point). 
-4: In count + (!is.na(new)) :
-  longer object length is not a multiple of shorter object length
+2: Removed 5282 rows containing missing values (geom_point). 
+3: Removed 5282 rows containing missing values (geom_point). 
 
 
 
@@ -258,23 +256,9 @@ The following object is masked from 'package:cummeRbund':
 
     getGene
 
-Warning messages:
-1: Removed 25 rows containing missing values (geom_point). 
-2: In image.default(z = matrix(z, ncol = 1), col = col, breaks = tmpbreaks,  :
-  unsorted 'breaks' will be sorted before use
-3: In image.default(z = matrix(z, ncol = 1), col = col, breaks = tmpbreaks,  :
-  unsorted 'breaks' will be sorted before use
-4: In image.default(z = matrix(z, ncol = 1), col = col, breaks = tmpbreaks,  :
-  unsorted 'breaks' will be sorted before use
-5: In fun(libname, pkgname) :
-  Can't find a usable tk.tcl in the following directories: 
-    /n/sw/centos6/tcl8.5.14/lib/tcl8.5/tk8.5 /n/sw/centos6/tcl8.5.14/lib/tk8.5 ./lib/tk8.5 ./library
-
-
-
-This probably means that tk wasn't installed properly.
 Loading required package: org.Mm.eg.db
 
+Loading required package: GO.db
 Loading required package: BSgenome
 Loading required package: Biostrings
 
@@ -301,5 +285,5 @@ The following objects are masked from 'package:IRanges':
 
 First Split
 Second Split
-Warning message:
-Removed 29 rows containing missing values (geom_point). 
+XIO:  fatal IO error 11 (Resource temporarily unavailable) on X server "rclogin07.rc.fas.harvard.edu:11.0"
+      after 71 requests (69 known processed) with 0 events remaining.

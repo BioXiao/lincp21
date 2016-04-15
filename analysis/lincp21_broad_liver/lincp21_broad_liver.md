@@ -1,6 +1,6 @@
 
 
-Trp53cor1 KO vs WT (Embryonic)
+Trp53cor1 KO vs WT (liver)
 ======================================
 
 
@@ -11,9 +11,6 @@ Trp53cor1 KO vs WT (Embryonic)
 ```
 
 
-```
-## Error in as.character(x): cannot coerce type 'closure' to vector of type 'character'
-```
 
 This file shows the wt-v-ko comparison for Trp53cor1. 
 
@@ -138,19 +135,7 @@ Expression heatmap:
 
 ### Track visualization 
 
-
-```
-## Error in as.vector(x, "character"): cannot coerce type 'closure' to vector of type 'character'
-```
-
-```
-## Error: dims [product 3] do not match the length of object [4]
-```
-
-```
-## pdf 
-##   2
-```
+![plot of chunk track_vis](figure/track_vis-1.png) 
 
 # Differential Analysis
 
@@ -161,7 +146,7 @@ Expression heatmap:
 There are 58 significantly differentially expressed genes. They are:
 
 <!-- html table generated in R 3.0.2 by xtable 1.7-3 package -->
-<!-- Thu Apr 14 11:38:19 2016 -->
+<!-- Thu Apr 14 21:10:29 2016 -->
 <TABLE border=1>
 <TR> <TH>  </TH> <TH> geneAnnot$gene_short_name </TH>  </TR>
   <TR> <TD align="right"> 1 </TD> <TD> Cnn1 </TD> </TR>
@@ -234,16 +219,6 @@ Foldchange heatmap of sigGenes
 ![plot of chunk DEgenes_FC_Heatmap](figure/DEgenes_FC_Heatmap-1.png) 
 
 
-
-```
-## Error in (function (classes, fdef, mtable) : unable to find an inherited method for function 'csFoldChangeHeatmap' for signature '"standardGeneric"'
-```
-
-
-```
-## Error in sqliteExecStatement(con, statement, bind.data): RS-DBI driver: (error in statement: near ")": syntax error)
-```
-
 ### Expression-level/significance relationship
 
 Scatter plot of significant genes only:
@@ -260,8 +235,6 @@ Volcano plot with significant genes only:
 
 
 # Gene/Pathway Analysis
-
-##
 
 Enrichment and zscores are calculated based on expression in KO vs WT (fpkmKO/fpkmWT), so genes that are down regulated in KO are shown in blue, while upregulation is shown in red. 
 
@@ -306,61 +279,22 @@ Cluster profiler used to call enichments of significantly differentially regulat
 
 
 
-```
-## Error in useMart("ENSEMBL_MART_ENSEMBL", "mmusculus_gene_ensembl", host = "www.ensembl.org"): Incorrect BioMart name, use the listMarts function to see which BioMart databases are available
-```
-
-```
-## Error in martCheck(mart): object 'ensembl' not found
-```
-
-```
-## Error in strsplit(as.character(sigEntrez), ", "): object 'sigEntrez' not found
-```
-
-```
-## Error in unlist(sigEZ): error in evaluating the argument 'x' in selecting a method for function 'unlist': Error: object 'sigEZ' not found
-```
-
-```
-## Error in enrich.internal(gene, organism = organism, pvalueCutoff = pvalueCutoff, : object 'sigEZ' not found
-```
-
-```
-## Error in enrich.internal(gene, organism = organism, pvalueCutoff = pvalueCutoff, : object 'sigEZ' not found
-```
-
-```
-## Error in enrich.internal(gene, organism = organism, pvalueCutoff = pvalueCutoff, : object 'sigEZ' not found
-```
-
-```
-## Error in enrich.internal(gene, organism = organism, pvalueCutoff = pvalueCutoff, : object 'sigEZ' not found
-```
-
-```
-## Error in enrich.internal(gene, organism = organism, pvalueCutoff = pvalueCutoff, : object 'sigEZ' not found
-```
 
 
 ```
-## Error in plot(goBP, showCategory = 20): error in evaluating the argument 'x' in selecting a method for function 'plot': Error: object 'goBP' not found
+## Error in unit(tic_pos.c, "mm"): 'x' and 'units' must have length > 0
 ```
 
-```
-## Error in plot(goMF, showCategory = 20): error in evaluating the argument 'x' in selecting a method for function 'plot': Error: object 'goMF' not found
-```
+![plot of chunk GO_figures](figure/GO_figures-1.png) ![plot of chunk GO_figures](figure/GO_figures-2.png) 
 
 ```
-## Error in plot(goCC, showCategory = 20): error in evaluating the argument 'x' in selecting a method for function 'plot': Error: object 'goCC' not found
+## Error in plot.window(...): need finite 'xlim' values
 ```
 
-```
-## Error in plot(kegg, showCategory = 20): error in evaluating the argument 'x' in selecting a method for function 'plot': Error: object 'kegg' not found
-```
+![plot of chunk GO_figures](figure/GO_figures-3.png) 
 
 ```
-## Error in plot(pathway, showCategory = 20): error in evaluating the argument 'x' in selecting a method for function 'plot': Error: object 'pathway' not found
+## Error in unit(tic_pos.c, "mm"): 'x' and 'units' must have length > 0
 ```
 
 # Cis vs Trans (locally)
@@ -369,38 +303,6 @@ log2 Foldchange and test statistic are calculated with the ratio of fpkm(KO)/fpk
 
 
 
-
-```
-## Error in hist(numGenesinRandomRegions, 100) + abline(v = nGenes_lncRNA): non-numeric argument to binary operator
-```
-
-![plot of chunk computationally intensive part of cis trans image](figure/computationally intensive part of cis trans image-1.png) 
-
-```
-## [1] "t-stat is: -11.4868321656036"
-```
-
-```
-## [1] "2-sided p value for 84genes in a 4mb region, is: 0.00000000000000000000000000000238094725232689"
-```
-
-```
-## [1] "one sided t-test for if most windows have fewer genes than this window 0.00000000000000000000000000000119047362616344"
-```
-
-```
-## 
-## 	One Sample t-test
-## 
-## data:  numGenesinRandomRegions
-## t = -11.4868, df = 9999, p-value < 0.00000000000000022
-## alternative hypothesis: true mean is less than 84
-## 95 percent confidence interval:
-##      -Inf 78.32298
-## sample estimates:
-## mean of x 
-##   77.3741
-```
 
 ```
 ## pdf 
@@ -417,7 +319,7 @@ The pvalue for genes significantly regulated in a region this size  is: 0.0099
 
 ## Samples used are:
 <!-- html table generated in R 3.0.2 by xtable 1.7-3 package -->
-<!-- Thu Apr 14 14:22:07 2016 -->
+<!-- Thu Apr 14 23:37:20 2016 -->
 <TABLE border=1>
 <TR> <TH>  </TH> <TH> 11 </TH>  </TR>
   <TR> <TD align="right"> 1 </TD> <TD> JR917 </TD> </TR>
@@ -433,7 +335,7 @@ The pvalue for genes significantly regulated in a region this size  is: 0.0099
 
 ## Replicates
 <!-- html table generated in R 3.0.2 by xtable 1.7-3 package -->
-<!-- Thu Apr 14 14:22:07 2016 -->
+<!-- Thu Apr 14 23:37:20 2016 -->
 <TABLE border=1>
 <TR> <TH>  </TH> <TH> file </TH> <TH> sample_name </TH> <TH> replicate </TH> <TH> rep_name </TH> <TH> total_mass </TH> <TH> norm_mass </TH> <TH> internal_scale </TH> <TH> external_scale </TH>  </TR>
   <TR> <TD align="right"> 1 </TD> <TD> /n/rinn_data1/users/agroff/seq/OtherMice/Diana/lincP21/quants/JR917/abundances.cxb </TD> <TD> WT </TD> <TD align="right">   0 </TD> <TD> WT_0 </TD> <TD align="right"> 37248000.00 </TD> <TD align="right"> 26534800.00 </TD> <TD align="right"> 1.48 </TD> <TD align="right"> 1.00 </TD> </TR>
@@ -472,53 +374,54 @@ The pvalue for genes significantly regulated in a region this size  is: 0.0099
 ##  [4] BSgenome.Mmusculus.UCSC.mm10_1.3.19
 ##  [5] BSgenome_1.30.0                    
 ##  [6] Biostrings_2.30.1                  
-##  [7] org.Mm.eg.db_2.10.1                
-##  [8] clusterProfiler_1.13.1             
-##  [9] DOSE_2.0.0                         
-## [10] ReactomePA_1.6.1                   
-## [11] AnnotationDbi_1.24.0               
-## [12] Biobase_2.22.0                     
-## [13] mgcv_1.8-2                         
-## [14] nlme_3.1-117                       
-## [15] RMySQL_0.9-3                       
-## [16] RColorBrewer_1.0-5                 
-## [17] gridExtra_0.9.1                    
-## [18] gtable_0.1.2                       
-## [19] marray_1.40.0                      
-## [20] gplots_2.14.2                      
-## [21] GSA_1.03                           
-## [22] limma_3.18.13                      
-## [23] xtable_1.7-3                       
-## [24] cummeRbund_2.7.2                   
-## [25] Gviz_1.6.0                         
-## [26] rtracklayer_1.22.7                 
-## [27] GenomicRanges_1.14.4               
-## [28] XVector_0.2.0                      
-## [29] IRanges_1.20.7                     
-## [30] fastcluster_1.1.13                 
-## [31] reshape2_1.4                       
-## [32] ggplot2_1.0.0                      
-## [33] RSQLite_0.11.4                     
-## [34] DBI_0.3.1                          
-## [35] BiocGenerics_0.8.0                 
-## [36] knitr_1.7                          
+##  [7] GO.db_2.10.1                       
+##  [8] org.Mm.eg.db_2.10.1                
+##  [9] clusterProfiler_1.13.1             
+## [10] DOSE_2.0.0                         
+## [11] ReactomePA_1.6.1                   
+## [12] AnnotationDbi_1.24.0               
+## [13] Biobase_2.22.0                     
+## [14] mgcv_1.8-2                         
+## [15] nlme_3.1-117                       
+## [16] RMySQL_0.9-3                       
+## [17] RColorBrewer_1.0-5                 
+## [18] gridExtra_0.9.1                    
+## [19] gtable_0.1.2                       
+## [20] marray_1.40.0                      
+## [21] gplots_2.14.2                      
+## [22] GSA_1.03                           
+## [23] limma_3.18.13                      
+## [24] xtable_1.7-3                       
+## [25] cummeRbund_2.7.2                   
+## [26] Gviz_1.6.0                         
+## [27] rtracklayer_1.22.7                 
+## [28] GenomicRanges_1.14.4               
+## [29] XVector_0.2.0                      
+## [30] IRanges_1.20.7                     
+## [31] fastcluster_1.1.13                 
+## [32] reshape2_1.4                       
+## [33] ggplot2_1.0.0                      
+## [34] RSQLite_0.11.4                     
+## [35] DBI_0.3.1                          
+## [36] BiocGenerics_0.8.0                 
+## [37] knitr_1.7                          
 ## 
 ## loaded via a namespace (and not attached):
 ##  [1] biomaRt_2.18.0         biovizBase_1.10.8      bitops_1.0-6          
 ##  [4] caTools_1.17.1         cluster_1.15.2         colorspace_1.2-4      
 ##  [7] dichromat_2.0-0        digest_0.6.4           DO.db_2.7             
 ## [10] evaluate_0.5.5         formatR_1.0            Formula_1.1-2         
-## [13] gdata_2.13.3           GenomicFeatures_1.14.5 GO.db_2.10.1          
-## [16] GOSemSim_1.20.3        graph_1.40.1           graphite_1.8.1        
-## [19] gtools_3.4.1           Hmisc_3.14-4           igraph_0.7.1          
-## [22] KEGG.db_2.10.1         KernSmooth_2.23-12     labeling_0.2          
-## [25] lattice_0.20-29        latticeExtra_0.6-26    MASS_7.3-33           
-## [28] Matrix_1.1-4           munsell_0.4.2          org.Hs.eg.db_2.10.1   
-## [31] proto_0.3-10           qvalue_1.36.0          Rcpp_0.11.3           
-## [34] RCurl_1.95-4.3         reactome.db_1.46.1     Rsamtools_1.14.3      
-## [37] scales_0.2.4           splines_3.0.2          stats4_3.0.2          
-## [40] survival_2.37-7        tcltk_3.0.2            tools_3.0.2           
-## [43] XML_3.98-1.1           zlibbioc_1.8.0
+## [13] gdata_2.13.3           GenomicFeatures_1.14.5 GOSemSim_1.20.3       
+## [16] graph_1.40.1           graphite_1.8.1         gtools_3.4.1          
+## [19] Hmisc_3.14-4           igraph_0.7.1           KEGG.db_2.10.1        
+## [22] KernSmooth_2.23-12     labeling_0.2           lattice_0.20-29       
+## [25] latticeExtra_0.6-26    MASS_7.3-33            Matrix_1.1-4          
+## [28] munsell_0.4.2          org.Hs.eg.db_2.10.1    proto_0.3-10          
+## [31] qvalue_1.36.0          Rcpp_0.11.3            RCurl_1.95-4.3        
+## [34] reactome.db_1.46.1     Rsamtools_1.14.3       scales_0.2.4          
+## [37] splines_3.0.2          stats4_3.0.2           survival_2.37-7       
+## [40] tcltk_3.0.2            tools_3.0.2            XML_3.98-1.1          
+## [43] zlibbioc_1.8.0
 ```
 
 ## Run Info
