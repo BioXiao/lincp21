@@ -1,0 +1,472 @@
+---
+output:
+  html_document:
+    toc: yes
+  pdf_document:
+    toc: yes
+---
+
+lincp21 MPRA analysis
+```{r opts}
+library(knitr)
+opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE,fig.path="/Users/AGroff/Dropbox/Rinnlab/Projects/oligogames/Lincp21/C2",fig.height=8, fig.width=8,dev=c('pdf'))
+```
+
+# Info
+
+General approach::
+	1. Pre-process data, normalize
+	2. Look at signal across locus
+	3. Identify (large) peaks, extract sequences
+		a. Look for motifs in those sequences
+	4. More signal based sequence anaylssi
+		a. Identify small/medium outlier regions 
+		b. Identify outlier elements
+		c. Look for motifs in these, look to "learn" what motifs are enriched in the small peaks
+
+
+
+```{r set_sample_conditions}
+linc<-"Lincp21"
+sample<-"C2C12"
+strand<-"-"
+randomize_reps=1000
+setwd("/Users/AGroff/Dropbox/Rinnlab/Projects/oligogames/Lincp21/C2")
+```
+
+```{r setup}
+#source("http://bioconductor.org/biocLite.R")
+library(plyr)
+library(seqinr)
+library(ggplot2)
+library(stringr)
+library(reshape2)
+library(matrixStats)
+library(dplyr)
+library(DCluster)
+library(gridExtra)
+library(cowplot)
+library(zoo)
+library(grid)
+library(Sushi)
+library(reshape2)
+library(gridBase)
+
+fullAnnot<-read.table("/Users/AGroff/Dropbox/Rinnlab/Projects/oligogames/OligoPool_with_local_ordering.txt",header=TRUE)
+
+#shortFullAnnot<-ddply(fullAnnot,"Element",head,1)
+#save(shortFullAnnot,file="/Users/AGroff/Dropbox/Rinnlab/Projects/oligogames/shortFullAnnot.Rdata")
+#load("/Users/AGroff/Dropbox/Rinnlab/Projects/oligogames/FINAL_MISEQ_TC_DATA_FOR_BREAK/ShortAnnot.Rdata")
+load("/Users/AGroff/Dropbox/Rinnlab/Projects/oligogames/shortFullAnnot.Rdata")
+annotation<-read.table("/Users/AGroff/Dropbox/Rinnlab/Projects/oligogames/barcode_annotation.txt",header=TRUE)
+mm9_bed<-read.table("/Users/AGroff/Dropbox/Rinnlab/Projects/oligogames/mm9_tagbed_MPRApool.bed",col.names=c("chrmm9","startmm9","endmm9","barcode","count"))
+mm9_bed<-mm9_bed[,c("chrmm9","startmm9","endmm9","barcode")]
+inputLocusCoords<-read.table("/Users/AGroff/Dropbox/Rinnlab/Projects/oligogames/Coords.tab",header=TRUE,stringsAsFactors=FALSE)
+fasta<-read.fasta("/Users/AGroff/Dropbox/Rinnlab/Projects/oligogames/EnhancerOligogamesTargets.fa")
+myColors<-c(no="black",yes="red")
+```
+
+```{r functions}
+
+#maybe also just input coords from fasta? 
+fullLocusSeq<-function(inputLocusCoords=inputLocusCoords,fasta=fasta,dat=dat,linc=""){
+  extractedDat=dat[,c("Base","Coord","uniquePosition")]
+  lncfa<-fasta[grep(linc,names(fasta))]
+  fasta_seq<-as.vector(lncfa$Lincp21_mm10_dna) #THIS COULD BE AN ISSUE
+  locusInfo<-inputLocusCoords[grep(linc,inputLocusCoords$name),]
+  strand=locusInfo$strand
+  coord_seq<-seq(locusInfo$mm10_start,locusInfo$mm10_end)
+  if(strand=="-"){coord_seq<-seq(locusInfo$mm10_end,locusInfo$mm10_start)} #will be - strand, but in the order that genomebrowser would spit out. (reverse complement of start-end + strand)
+  inputData<-as.data.frame(cbind(fasta_seq,coord_seq))
+  inputData$chr<-locusInfo$chr
+  inputData$uniquePosition<-paste(inputData$chr,inputData$coord_seq,sep=":")
+  combinedSequenceData<-merge(inputData,extractedDat,by.x="uniquePosition",by.y="uniquePosition",all.x=TRUE)
+  combinedSequenceData$Base[is.na(combinedSequenceData$Base)]<-"-"
+  list(inputData,combinedSequenceData)
+}
+
+#read and normalize data
+#IF FOCUSING ON ONE LOCUS, add "linc" here so normalized within locus! 
+normalize_and_annotate<-function(tagCounts_orig,annotation,mm9_bed,linc=""){
+  tagCounts_orig[tagCounts_orig<40]<-0
+  filterTags<-merge(tagCounts_orig,annotation,by.x="tags",by.y="barcode")
+  filterTags<-filterTags[grep(linc,filterTags$name),]
+  sums<-colSums(filterTags[,2:7])
+  fracs<-(filterTags[,2:7]/sums[col(filterTags)]) #colSums(fracs)
+  tagCounts<-cbind(filterTags$tags,fracs)
+  names<-c("tags",names(fracs))
+  names(tagCounts)<-names
+  annotatedTagCounts<-merge(annotation,tagCounts,by.x="barcode",by.y="tags")
+  names(annotatedTagCounts)<-c("barcode","coords","element","gene_name","exp1","exp2","exp3","vec1","vec2","vec3")
+  dat<-annotatedTagCounts
+  #dat$expMean<-rowMeans(dat[,5:7])
+  #dat$vecMean<-rowMeans(dat[,8:10])
+  #dat$ratio<-with(dat,expMean/vecMean)
+  dat$expMed<-rowMedians(as.matrix(dat[,5:7]))
+  dat$vecMed<-rowMedians(as.matrix(dat[,8:10]))
+  dat$ratio<-with(dat,expMed/vecMed)
+  dat_annot<-merge(fullAnnot,dat)
+  #dat_annot$expMeanAdj<-dat_annot$expMean+(10^-7)
+  #dat_annot$vecMeanAdj<-dat_annot$vecMean+(10^-7)
+  #dat_annot$ratioAdj<-with(dat_annot,expMeanAdj/vecMeanAdj)
+  dat_annot<-merge(dat_annot,mm9_bed,by.x="barcode",by.y="barcode",all.x=TRUE) 
+  dat_annot
+}
+
+#convert to bases mm10
+#MAY NEED TO PASS SOME ANNOTATION STRUCTURES... . 
+restructure_to_bases_mm10<-function(dat_elements_annot=dat_elements_annot,strand){
+  locus<-str_split_fixed(dat_elements_annot$localCoordinates,":",2) #changed localCoords to coords
+  startandend<-str_split_fixed(locus[,2],"-",2)
+  chr<-locus[,1]
+  start<-startandend[,1]
+  end<-startandend[,2]
+  if(strand=="-"){newStart<-end;end<-start;start<-newStart} #need to make sure coords count DOWN bc on - strand! 
+  dat_elements_annot$chr<-chr
+  dat_elements_annot$start<-start
+  dat_elements_annot$end<-end
+
+  #BASES
+  basesGenomic<-str_split(dat_elements_annot$element,"")
+  names(basesGenomic)<-dat_elements_annot$barcode
+  basesGenomic<-t(as.matrix(as.data.frame(basesGenomic)))
+  basesGenomicExpanded<-cbind(dat_elements_annot,basesGenomic)
+  Gbases_melted<-melt(basesGenomicExpanded,id.vars=names(basesGenomicExpanded)[1:22])
+  Gbases_melted<-Gbases_melted[order(Gbases_melted$LocalOrder),]
+
+  
+  #COORDS
+  basecoordsGenomic<-t(apply(dat_elements_annot,1,function(x) seq(as.numeric(x[21]),as.numeric(x[22]))))
+  baseCoordsGenomicExpanded<-cbind(dat_elements_annot,basecoordsGenomic)
+  Gbasecoords_melted<-melt(baseCoordsGenomicExpanded,id.vars=names(baseCoordsGenomicExpanded[1:22]))
+  Gbasecoords_melted<-Gbasecoords_melted[order(Gbasecoords_melted$LocalOrder),]
+
+  genomic<-cbind(Gbases_melted,Gbasecoords_melted[,24])
+  newNames<-c(names(genomic)[1:22],"internalelementCoord","Base","Coord")
+  names(genomic)<-newNames
+  #genomic<-genomic[order(genomic$name,genomic$LocalOrder,genomic$internalelementCoord),]
+  genomic$uniquePosition<-paste(genomic$chr,genomic$Coord,sep=":")
+  genomic_sumMedians_unique<-aggregate(cbind(exp1,exp2,exp3,vec1,vec2,vec3)~uniquePosition,data=genomic,mean)
+  ##^^^ SHOULD THIS BE SUM OR MEAN!? SUM might over-weight regions that were more heavily tiled by chance... 
+  ## for now, changing to mean 
+  
+  #genomic_unique<-ddply(genomic[,c("element","name","barcode",names(genomic)[19:26])],"uniquePosition",head,1)
+  #^^ ddply SUPER slow, use match instead; http://stackoverflow.com/questions/19944334/extract-rows-for-the-first-occurrence-of-a-variable-in-a-data-frame
+  #t.first <- species[match(unique(species$Taxa), species$Taxa),]
+
+  genomic_unique<-genomic[match(unique(genomic$uniquePosition),genomic$uniquePosition),c("element","name","barcode",names(genomic)[19:26])]
+  genomic_positionSums<-merge(genomic_sumMedians_unique,genomic_unique,by.x="uniquePosition",by.y="uniquePosition",all.y=FALSE)
+
+  # now do median or mean across biological replicates? 
+  genomic_positionSums$expMean<-rowMeans(genomic_positionSums[,2:4])
+  genomic_positionSums$vecMean<-rowMeans(genomic_positionSums[,5:7])
+  genomic_positionSums$ratio<-with(genomic_positionSums,expMean/vecMean)
+  dat<-genomic_positionSums
+  dat$expMeanAdj<-dat$expMean+1*10^-7
+  dat$vecMeanAdj<-dat$vecMean+1*10^-7
+  dat$ratioAdj<-dat$expMeanAdj/dat$vecMeanAdj
+  dat<-dat[order(dat$Coord),]
+  if(strand=="-"){dat<-dat[order(dat$Coord,decreasing=TRUE),]}
+  #check base by base that coord matches base in element
+  dat
+  
+}
+
+
+#sliding window
+# Modified from http://coleoguy.blogspot.com/2014/04/sliding-window-analysis.html
+# similar to rollapply but faster
+slideFunct <- function(data, window, step){
+  total <- dim(data)[1]
+  spots <- seq(from = 1, to = (total - window + 1), by = step)
+  rolledRatio<-vector(length = length(spots))
+  uniquePosition<-vector(length = length(spots))
+  for(i in 1:length(spots)){
+    rolledRatio[i]<-mean(data$ratioAdj[spots[i]:(spots[i]+window-1)])
+    uniquePosition[i]<-data$uniquePosition[spots[i]] 
+  }
+  result.df<-as.data.frame(cbind(rolledRatio,uniquePosition))
+  colnames(result.df)<-c("rolledRatio","uniquePosition")
+  result.df$rolledRatio<-as.numeric(as.character(result.df$rolledRatio))
+  return(result.df)
+}
+
+#scan statistic 
+#input<-d, window, step, permutedmatrix, number of randomization used, dat (with bases for peakseq) 
+#output:
+#list: d_bins_copy, signal_up, signal_down, ggplot_up, ggplot_down, upPeakBed, peakSeq
+statScanSlideWindows<-function(data,window,step,permutedMatrix,randomize_reps=1000,dat=combinedSequenceData,strand=strand){
+  data<-data[order(data$Coord),]
+  dfList<-split(data,data$name)
+  dfList<-dfList[lapply(dfList,function(x)dim(x)[1])>0]
+  binList<-lapply(dfList,function(x)slideFunct(x,window,step))
+  binList<-do.call("rbind",binList)
+  d_bins<-merge(data[1:6],binList,by.x="uniquePosition",by.y="uniquePosition")
+  rm(binList)
+  rm(dfList)
+  d_bins$chr<-str_split_fixed(d_bins$uniquePosition,":",2)[,1]
+  d_bins$end<-d_bins$Coord+window-1
+  d_bins$score<-0
+  d_bins$pval<-0
+
+  #sigUP
+  for(i in seq(1:randomize_reps)){
+    dperm<-data;
+    dperm$ratioAdj<-permutedMatrix[,i]
+    dpermList<-split(dperm,dperm$name)
+    dpermList<-dpermList[lapply(dpermList,function(x)dim(x)[1])>0]
+    dperm_bins<-lapply(dpermList,function(x)slideFunct(x,window,step))
+    dperm_bins<-do.call("rbind",dperm_bins)
+    d_bins$score[which(dperm_bins$rolledRatio>=d_bins$rolledRatio)]<-(d_bins$score[which(dperm_bins$rolledRatio>=d_bins$rolledRatio)]+1)
+    d_bins$pval<-d_bins$score/i
+  }
+  d_bins$sig<-"no"
+  d_bins$sig[which(d_bins$pval<=0.01)]<-"yes"
+
+  up_signal<-d_bins[which(d_bins$sig=="yes"),]
+  
+  # SIG DOWN 
+  d_bins$score_down<-0
+  d_bins$pval_down<-0
+  for(i in seq(1:randomize_reps)){
+    dperm<-data;
+    dperm$ratioAdj<-permutedMatrix[,i]
+    dpermList<-split(dperm,dperm$name)
+    dpermList<-dpermList[lapply(dpermList,function(x)dim(x)[1])>0]
+    dperm_bins<-lapply(dpermList,function(x)slideFunct(x,window,step))
+    dperm_bins<-do.call("rbind",dperm_bins)
+    d_bins$score_down[which(dperm_bins$rolledRatio<d_bins$rolledRatio)]<-(d_bins$score_down[which(dperm_bins$rolledRatio<d_bins$rolledRatio)]+1)
+    d_bins$pval_down<-d_bins$score_down/i
+  }
+  d_bins$sig_down<-"no"
+  d_bins$sig_down[which(d_bins$pval_down<=0.01)]<-"yes"
+  down_signal<-d_bins[which(d_bins$sig_down=="yes"),]
+  
+  #split each locus into sig and not 
+  #keep only significant peaks
+  #if coord distance < step size*2 from previous coord distance, label as same peak. otherwise increment by 1 
+  
+  d_bins$upPeaks<-factor(paste(d_bins$name,d_bins$sig,sep="_"))
+  d_bins$downPeaks<-factor(paste(d_bins$name,d_bins$sig_down,sep="_"))
+  peaks_up<-split(d_bins,d_bins$upPeaks)
+  peaks_up<-peaks_up[grep("*yes",names(peaks_up))]
+  peaks_up<-lapply(peaks_up,function(x){
+    length<-dim(x)[1]
+    x$Coord<-as.numeric(as.character(x$Coord))
+    peaknum<-1
+    peakList<-rep(1,length)
+    x<-x[order(x$name,x$Coord),]
+    
+    if(length<=2){
+        if(length==2){
+          if(x$Coord[2]-x$Coord[1]>2*step){peakList<-c(1,2)}
+        }
+        x$peakNums<-peakList
+        x
+    }else{
+      for(i in (2:length)){
+        if(x$Coord[i]-x$Coord[i-1]>2*step){peaknum<-peaknum+1}
+        peakList[i]<-peaknum
+      }
+      x$peakNums<-as.numeric(as.character(peakList))
+      x
+    }
+  })
+  up<-do.call("rbind",peaks_up)
+  d_bins<-merge(d_bins,up[,c("uniquePosition","peakNums")],all.x=TRUE)
+  rm(up)
+    
+  A<-ggplot(d_bins,aes(Coord,log2(rolledRatio),colour=sig))+geom_bar(stat="identity")+facet_grid(.~name,scales="free")+theme_bw()#+geom_segment(data=subset(d_bins,!is.na(peakNums)),aes(x=Coord,xend=Coord+step,y=max(log2(rolledRatio)),yend=max(log2(rolledRatio))),size=2)
+  
+  
+  #ggplot(d_bins,aes(Coord,log2(rolledRatio),color=sig_down))+geom_bar(stat="identity")+facet_grid(.~name,scales="free")+theme_bw()+ggtitle("Sig Down, Window 200, step 50, 1000 rep randomization")
+ 
+  peaks_down<-split(d_bins,d_bins$downPeaks)
+  peaks_down<-peaks_down[grep("*yes",names(peaks_down))]
+  peaks_down<-lapply(peaks_down,function(x){
+    length<-dim(x)[1]
+    x$Coord<-as.numeric(as.character(x$Coord))
+    peaknum<-1
+    peakList<-rep(1,length)
+    x<-x[order(x$name,x$Coord),]
+    
+    if(length<=2){
+        if(length==2){
+          if(x$Coord[2]-x$Coord[1]>2*step){peakList<-c(1,2)}
+        }
+        x$peakNums_down<-peakList
+        x
+    }else{
+      for(i in (2:length)){
+        if(x$Coord[i]-x$Coord[i-1]>2*step){peaknum<-peaknum+1}
+        peakList[i]<-peaknum
+      }
+      x$peakNums_down<-as.numeric(as.character(peakList))
+      x
+    }
+  })
+  down<-do.call("rbind",peaks_down)
+  d_bins<-merge(d_bins,down[,c("uniquePosition","peakNums_down")],all.x=TRUE)
+  rm(down)
+ 
+  B<-ggplot(d_bins,aes(Coord,log2(rolledRatio),colour=sig_down))+geom_bar(stat="identity")+facet_grid(.~name,scales="free")+theme_bw()#+geom_segment(data=subset(d_bins,!is.na(peakNums_down)),aes(x=Coord,xend=Coord+step,y=min(log2(rolledRatio)),yend=min(log2(rolledRatio))),size=2)
+
+  d_bins<-d_bins[order(d_bins$Coord),]
+  peaks<-split(d_bins,d_bins$peakNums)
+  input_bed<-vector()
+  input_bed<-lapply(peaks,function(x){
+    start<-x[1,3]
+    end<-x[dim(x)[[1]],9]
+    chr<-ifelse(is.na(x[1,8]),"NotGenomic",x[1,8])
+    input_bed<-rbind(input_bed,c(chr,start,end)) #chr, start, end of peak 
+  }
+  )
+  test<-ifelse(length(input_bed)>1,"TRUE","FALSE")
+  if(test=="TRUE"){
+    input_bed<-as.data.frame(do.call("rbind",input_bed))
+  }else{
+      input_bed<-as.data.frame(input_bed[[1]])
+  }
+  
+  names(input_bed)<-c("chr","start","end")
+  input_bed<-as.data.frame(input_bed)
+  peakSeq<-extractSequencesfromBed(input_bed,dat,strand)
+  return(list(d_bins,up_signal,down_signal,A,B,input_bed,peakSeq))
+}
+
+
+#extract sequences from short windows 
+#input desired subset of dbins and dat (with locus by coord)
+extractSequences<-function(data_bins,data_coord,strand=strand){
+  data_coord<-data_coord[order(data_coord$coord_seq),]
+  if(strand=="-"){data_coord<-data_coord[order(data_coord$coord_seq,decreasing=TRUE),]}
+  #outliers<-data_bins[which(data_bins$sig=="yes"),]
+  outliers<-data_bins
+  bed<-outliers[,c("chr","Coord","end")]
+  regions<-apply(bed,1,function(x)data_coord[which(data_coord$Coord %in% seq(as.numeric(x[[2]]),as.numeric(x[[3]]))),c("Base")])
+  regions<-apply(regions,2,toString)
+  regions<-lapply(regions,function(x)gsub(", ","",x))
+  regions<-do.call("rbind",regions)
+  #regions<-lapply(regions,function(x){paste(x,collapse="")})
+  #regions<-do.call("rbind",regions)
+  lengthOfRegions<-length(regions[,1])
+  fasta<-vector()
+  for(i in seq(1:lengthOfRegions)){
+    name<-paste(">",outliers$uniquePosition[i],sep="")
+    seq<-as.character(regions[i,1])
+    fasta<-rbind(fasta,name,seq)
+  }
+  fasta
+}
+
+extractSequencesfromBed<-function(bed,data_coord=combinedSequenceData,strand=strand){
+  #BED MUST BE A DATAFRAME. ASSERT THAT HERE?? THROW ERROR... 
+  stopifnot(class(bed)=="data.frame")
+  if(dim(bed)[[1]]<1){return("bed contains no values")}
+  data_coord<-data_coord[order(data_coord$coord_seq),]
+  if(strand=="-"){data_coord<-data_coord[order(data_coord$coord_seq,decreasing=TRUE),]}
+  regions<-apply(bed,1,function(x)data_coord[which(data_coord$coord_seq %in% seq(as.numeric(x[[2]]),as.numeric(x[[3]]))),c("Base")]) #search ALL possible coordinates, take all bases including "NA"
+  #if(dim(bed)[1]==1){}if(dim(bed)[1]>1){regions<-lapply(regions,toString)}#unused ifbed is always a data.frame
+  #regions<-apply(regions,2,toString)
+  regions<-lapply(regions,function(x){paste(x,collapse="")})
+  #regions<-lapply(regions,function(x)gsub(", ","",x))
+  regions<-do.call("rbind",regions)
+  lengthOfRegions<-length(regions[,1])
+  fasta<-vector()
+  for(i in seq(1:lengthOfRegions)){
+    name<-paste(">peak_",i,sep="")
+    seq<-as.character(regions[i,1])
+    fasta<-rbind(fasta,name,seq)
+  }
+  fasta
+}
+```
+
+Tag replicates tracked per tag through each sample, and normalized to fraction of pool
+
+```{r tagReplicates_normalize}
+sample<-"C2C12"
+tagCounts_orig<-read.table("/Users/AGroff/Dropbox/Rinnlab/Projects/oligogames/figures/C2C12_Hiseq_Analysis/tag_rep_counts.tab",header=TRUE)
+dat_annot<-normalize_and_annotate(tagCounts_orig,annotation,mm9_bed)
+dat_annot<-dat_annot[grep(linc,dat_annot$name),]
+```
+
+```{r restructure_to_bases_mm10}
+#really just want the MEDIANS of the individual tag ratios--dont want to do improper comparisons 
+dat_elements<-aggregate(cbind(exp1,exp2,exp3,vec1,vec2,vec3)~element,data=dat_annot,median)
+#include mm9
+dat_elements_annot<-merge(dat_elements,shortFullAnnot,by.x="element",by.y="Element") 
+dat<-restructure_to_bases_mm10(dat_elements_annot,strand)
+sequenceInfo<-fullLocusSeq(inputLocusCoords,fasta,dat,linc)
+combinedSequenceData<-sequenceInfo[[2]]
+ggplot(dat,aes(Coord,log2(ratio)))+geom_bar(stat="identity")+theme_bw()+ggtitle(paste(linc,"mm10 by coord"))+scale_color_manual(values=myColors)
+d<-dat[,c("uniquePosition","name","Coord","vecMeanAdj","expMeanAdj","ratioAdj")]
+```
+
+
+```{r QC}
+normalize_and_annotate<-function(tagCounts_orig,annotation,mm9_bed,linc=""){
+  tagCounts_orig[tagCounts_orig<40]<-0
+  filterTags<-merge(tagCounts_orig,annotation,by.x="tags",by.y="barcode")
+  filterTags<-filterTags[grep(linc,filterTags$name),]
+  sums<-colSums(filterTags[,2:7])
+  fracs<-(filterTags[,2:7]/sums[col(filterTags)]) #colSums(fracs)
+  tagCounts<-cbind(filterTags$tags,fracs)
+  names<-c("tags",names(fracs))
+  names(tagCounts)<-names
+  annotatedTagCounts<-merge(annotation,tagCounts,by.x="barcode",by.y="tags")
+  names(annotatedTagCounts)<-c("barcode","coords","element","gene_name","exp1","exp2","exp3","vec1","vec2","vec3")
+  dat<-annotatedTagCounts
+  #dat$expMean<-rowMeans(dat[,5:7])
+  #dat$vecMean<-rowMeans(dat[,8:10])
+  #dat$ratio<-with(dat,expMean/vecMean)
+  dat$expMed<-rowMedians(as.matrix(dat[,5:7]))
+  dat$vecMed<-rowMedians(as.matrix(dat[,8:10]))
+  dat$ratio<-with(dat,expMed/vecMed)
+  dat_annot<-merge(fullAnnot,dat)
+  #dat_annot$expMeanAdj<-dat_annot$expMean+(10^-7)
+  #dat_annot$vecMeanAdj<-dat_annot$vecMean+(10^-7)
+  #dat_annot$ratioAdj<-with(dat_annot,expMeanAdj/vecMeanAdj)
+  dat_annot<-merge(dat_annot,mm9_bed,by.x="barcode",by.y="barcode",all.x=TRUE) 
+  dat_annot
+}
+tagCounts_orig<-as.data.frame(read.table("/Users/AGroff/Dropbox/Rinnlab/Projects/oligogames/Lincp21/tag_rep_counts_Lincp21MPRA.tab",header=TRUE))
+dat_annot<-normalize_and_annotate(tagCounts_orig,annotation,mm9_bed)
+dat_annot<-dat_annot[grep(linc,dat_annot$name),]
+
+
+#replicates
+library(GGally)
+qc_dat<-dat_annot[,17:22]
+qc_exp<-qc_dat[,1:3]
+qc_vec<-qc_dat[,4:6]
+#pdf("qc_scatter_exp.pdf")
+ggpairs(qc_exp)+theme_bw()
+#dev.off()
+#pdf("qc_scatter_vec.pdf")
+ggpairs(qc_vec)+theme_bw()
+#dev.off()
+
+qcdat.melt<-melt(qc_dat)
+#pdf("replicate_tag_distributions.pdf")
+ggplot(qcdat.melt,aes(log(value),fill=variable))+geom_density(alpha=0.5)
+#dev.off()
+```
+
+
+```{r bin,fig.width=15}
+d<-d[order(d$name,d$Coord),]
+set.seed(1)
+dpermutedMatrix<-replicate(randomize_reps,sample(d$ratioAdj))
+```
+
+# Signal Peaks
+
+```{r peaks500_50}
+myColors<-c(no="black",yes="red")
+outputList<-statScanSlideWindows(d,500,50,dpermutedMatrix,1000,combinedSequenceData,strand)
+outputList[[4]]+scale_color_manual(values=myColors)+ggtitle(paste(linc, "window 500, step 50"))
+outputList[[5]]+scale_color_manual(values=myColors)+ggtitle(paste(linc, "window 500, step 50"))
+d_bins<-outputList[[1]]
+```
+
