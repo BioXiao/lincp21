@@ -14,8 +14,8 @@ library(ggplot2)
 library(reshape2)
 alpha<-0.05 
 genome<-"mm10"
-all<-"/n/rinn_data2/users/agroff/seq/OtherMice/Diana/lincP21/diff/BROAD_ALL_3_ALL_TISSUES/"
-#all<-"/Volumes/valor2/users/agroff/seq/OtherMice/Diana/lincP21/diff/BROAD_ALL_3_ALL_TISSUES/"
+#all<-"/n/rinn_data2/users/agroff/seq/OtherMice/Diana/lincP21/diff/BROAD_ALL_3_ALL_TISSUES/"
+all<-"/Volumes/valor2/users/agroff/seq/OtherMice/Diana/lincP21/diff/BROAD_ALL_3_ALL_TISSUES/"
 cuff<-readCufflinks(dir=all,gtfFile="/Volumes/valor2/users/agroff/Brainmap/annotation/mm10_gencode_vM2_with_lncRNAs_and_LacZ.gtf",genome=genome)
 ```
 
@@ -153,7 +153,7 @@ cdkn1aAndlincp21<-getGenes(cuff,c("Cdkn1a","Trp53cor1"))
 responseDat<-diffData(cdkn1aAndlincp21)
 fpkms<-repFpkmMatrix(cdkn1aAndlincp21)
 fpkms$gene<-c("Cdkn1a","Linc-p21")
-otherFpkm<-t(fpkms[,1:59])
+otherFpkm<-t(fpkms[,1:60])
 otherFpkm<-as.data.frame(otherFpkm)
 colnames(otherFpkm)<-c("Cdkn1a","Lincp21")
 tissue<-as.data.frame(str_split_fixed(row.names(otherFpkm),"_",4))
@@ -175,16 +175,34 @@ summary(fit)
 
 
 ##Fig2B
+responseDat<-diffData(cdkn1aAndlincp21)
 responseDat$PercentReduced<-with(responseDat,((1-value_2/value_1)*100))
 responseDat$gene<-"Cdkn1a"
 responseDat$gene[which(responseDat$gene_id=="ENSMUSG00000085912.1")]<-"Lincp21"
-responseDat$tissue<-str_split_fixed(responseDat$sample_1,"_",2)[,2]
-dat<-responseDat[,c(5,7,12:14)]
+
+#make sure wt-ko comparison 
+responseDat$condition1<-str_split_fixed(responseDat$sample_1,"_",2)[,1]
+responseDat$condition2<-str_split_fixed(responseDat$sample_2,"_",2)[,1]
+responseDat<-responseDat[which(responseDat$condition1!=responseDat$condition2),]
+#make sure same tissue comparison 
+responseDat$tissue1<-str_split_fixed(responseDat$sample_1,"_",2)[,2]
+responseDat$tissue2<-str_split_fixed(responseDat$sample_2,"_",2)[,2]
+responseDat<-responseDat[which(responseDat$tissue1==responseDat$tissue2),]
+
+#re-make with lincp21 fpkms calculated from FPKM_Matrix, and SE valculations.. 
+#lincp21_averages
+#lincp21_std_errors<-
+  
+  
+
+dat<-responseDat[,c(5,7,12:13,16)]
+dat$log2_fold_change<-as.numeric(dat$log2_fold_change)
 library(reshape2)
-dat.cast<-dcast(dat,tissue~gene,value.var="PercentReduced")
-dat.cast.fpkm<-dcast(dat,tissue~gene,value.var="value_1")
+dat.cast<-dcast(dat,tissue1~gene,value.var="PercentReduced")
+dat.cast.fpkm<-dcast(dat,tissue1~gene,value.var="value_1")
 names(dat.cast.fpkm)<-c("tissue","Cdkn1a_WT_Fpkm","Lincp21_WT_Fpkm")
-dat.cast.log2foldchange<-dcast(dat,tissue~gene,value.var="log2_fold_change")
+
+dat.cast.log2foldchange<-dcast(dat,tissue1~gene,value.var="log2_fold_change")
 names(dat.cast.log2foldchange)<-paste(names(dat.cast.log2foldchange),"logfoldchange",sep="_")
 dat.cast$Lincp21<-dat.cast.fpkm$Lincp21_WT_Fpkm
 names(dat.cast)<-c("tissue","Cdkn1a_Percent_Reduced","Lincp21_WT_Fpkm")
@@ -226,11 +244,14 @@ dat.cast<-merge(dat.cast,std_error,by.x="tissue",by.y="Group.1")
 names(dat.cast)[6]<-"reduced_se"
 limits<-aes(ymin=dat.cast$Cdkn1a_Percent_Reduced-dat.cast$reduced_se,ymax=dat.cast$Cdkn1a_Percent_Reduced+dat.cast$reduced_se)
 bars<-ggplot(dat.cast,aes(tissue,Cdkn1a_Percent_Reduced))+geom_bar(stat="identity")+geom_errorbar(limits,width=0.2)+theme_bw()
-dots<-ggplot(dat.cast,aes(tissue,Lincp21_WT_Fpkm))+geom_point(color="red",size=5)+coord_cartesian(ylim=c(0,1))+theme_bw()
+
+limits<-aes(ymin=dat.cast$Lincp21_WT_Fpkm-dat.cast$Lincp21_SE,ymax=dat.cast$Lincp21_WT_Fpkm+dat.cast$Lincp21_SE)
+dots<-ggplot(dat.cast,aes(tissue,Lincp21_WT_Fpkm))+geom_point(color="red",size=5)+coord_cartesian(ylim=c(0,1))+geom_errorbar(limits,width=0.5,color="red")+theme_bw()
+
 grid.newpage()
-#pdf("Cdkn1aPercentReduction.pdf")
+pdf("Cdkn1aPercentReduction.pdf")
 grid.draw(rbind(ggplotGrob(bars), ggplotGrob(dots), size = "last"))
-#dev.off()
+dev.off()
 
 
 #ADD lincp21 WT average values to dat.cast and calculate from average
